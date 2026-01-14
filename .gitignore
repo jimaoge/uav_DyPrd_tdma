@@ -1,0 +1,8 @@
+venv/
+.vscode/
+__pycache__/
+*.npz
+*.pkl
+*.pth
+*.png
+*.csv

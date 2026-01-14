@@ -1,0 +1,19 @@
+lstm_train.py
+    只使用训练集和验证集
+    输出训练历史曲线图,training_history_node_[节点ID].png
+        横坐标:训练轮数(Epochs)
+        纵坐标:损失值(Loss)
+        蓝色曲线:训练损失(Train Loss),在每个epoch中,模型在训练集上计算的损失平均值,表示模型在训练数据上的拟合程度
+        橙色曲线:验证损失(Validation Loss),在每个epoch后,模型在验证集上计算的损失平均值,表示模型在未见数据上的泛化能力
+    理想情况:训练损失和验证损失都随着训练逐渐下降,最终收敛到一个较低且接近的值,说明模型既学到了训练数据的规律,又具备良好的泛化能力
+    过拟合:训练损失持续下降,但验证损失在某个点后开始上升,两条曲线之间存在较大的差距,说明模型过于拟合训练数据的噪声,而不是学习通用规律
+    欠拟合:训练损失和验证损失都停留在较高水平,两条曲线都下降很慢或基本不下降,说明模型能力不足或训练不够充分
+    python lstm_train.py \
+    --data_dir processed_data \
+    --model_dir trained_models \
+    --epochs 150 \
+    --batch_size 64 \
+    --node_id 5                   # 指定要训练的节点ID
+    训练完成后会在model_dir生成:
+    1. ​模型文件​​:model_node_X.pth
+    2. ​​训练历史图​​:training_history_node_X.png

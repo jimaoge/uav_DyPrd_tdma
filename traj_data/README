@@ -1,0 +1,28 @@
+topology_generator.py 生成网络邻接矩阵的json文件
+    --input, -i: UAV轨迹数据CSV文件路径(必需)
+    --output, -o: 输出JSON文件路径(默认:topology.json)
+    --range, -r: 通信距离(米,默认:200)
+    --start, -s: 起始时间(秒,默认:10)
+    --duration, -d: 持续时间(秒,默认:5)
+    --nodes, -n: 节点数量(默认:9)
+    --slots, -t: 时隙数量(默认:9)
+    python topology_generator.py --input uav_data.csv --range 200 --start 10 --duration 5
+
+csv_round_int.py 
+    四舍五入保留整数
+
+preprocess.py
+    读取origin_data/里包含多个节点的CSV文件,支持时间范围,如只保留时间在0~max_time之间的数据。
+    模型训练前,将数据集划分为训练集60%,验证集20%,测试集20%
+    在processed_data目录下生成pkl文件,npz文件(数据集).其中npz包含6个numpy数组:
+    X_train- 训练输入 (shape: [n_train, 24, 3])
+    y_train- 训练标签 (shape: [n_train, 12, 3])
+    X_val- 验证输入 (shape: [n_val, 24, 3])
+    y_val- 验证标签 (shape: [n_val, 12, 3])
+    X_test- 测试输入 (shape: [n_test, 24, 3]) ← 不用于训练的独立测试集
+    y_test- 测试标签 (shape: [n_test, 12, 3]) ← 不用于训练的独立测试集
+    明确区分了训练、验证和测试三个阶段。
+    训练代码使用训练集训练,验证集来调参和早停。预测代码使用测试集最终评估模型泛化能力。
+    所以LSTM中 输入X_train (24个历史点) → 输出y_train (12个未来点)
+    X_train[0] = [归一化的位置0, 位置1, ..., 位置23]  # 形状: (24, 3)
+    y_train[0] = [归一化的位置24, 位置25, ..., 位置35] # 形状: (12, 3)
