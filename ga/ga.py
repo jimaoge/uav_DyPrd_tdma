@@ -419,51 +419,51 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
     assert len(nowPopulation[maxFitIndex].Get_Sequence()) == N_2, "列表长度不正确"
     sequence = nowPopulation[maxFitIndex].Get_Sequence()
     matrix = np.array(sequence).reshape(SLOT_NUM, NODE_NUM)
-    print(f"遗传算法求解的时隙分配矩阵：\n{matrix}")
+    # print(f"遗传算法求解的时隙分配矩阵：\n{matrix}")
     
-    result_path = config.DATA_PATHS['saved_slots_matrix_path']
-    # 确保结果目录存在
-    os.makedirs('result', exist_ok=True)
+    # result_path = config.DATA_PATHS['saved_slots_matrix_path']
+    # # 确保结果目录存在
+    # os.makedirs('result', exist_ok=True)
     
-    # 创建带时间戳的唯一文件名
-    timestamp = 1
+    # # 创建带时间戳的唯一文件名
+    # timestamp = 1
     
-    # 保存适应度历史数据到JSON文件
-    fitness_data = {
-        'max_fitness_history': max_fitness_history,
-        'avg_fitness_history': avg_fitness_history,
-        'run_id': run_id,
-        'timestamp': timestamp,
-        'parameters': {
-            'POP_SIZE': POP_SIZE,
-            'PC': PC,
-            'PM': PM,
-            'N_GENERATIONS': N_GENERATIONS,
-            'NODE_NUM': NODE_NUM,
-            'SLOT_NUM': SLOT_NUM
-        }
-    }
+    # # 保存适应度历史数据到JSON文件
+    # fitness_data = {
+    #     'max_fitness_history': max_fitness_history,
+    #     'avg_fitness_history': avg_fitness_history,
+    #     'run_id': run_id,
+    #     'timestamp': timestamp,
+    #     'parameters': {
+    #         'POP_SIZE': POP_SIZE,
+    #         'PC': PC,
+    #         'PM': PM,
+    #         'N_GENERATIONS': N_GENERATIONS,
+    #         'NODE_NUM': NODE_NUM,
+    #         'SLOT_NUM': SLOT_NUM
+    #     }
+    # }
     
-    data_filename = os.path.join(result_path, f"fitness_data_{timestamp}_run{run_id}.json")
-    with open(data_filename, 'w') as f:
-        json.dump(fitness_data, f, indent=2)
+    # data_filename = os.path.join(result_path, f"fitness_data_{timestamp}_run{run_id}.json")
+    # with open(data_filename, 'w') as f:
+    #     json.dump(fitness_data, f, indent=2)
     
-    print(f"适应度历史数据已保存至: {data_filename}")
+    # print(f"适应度历史数据已保存至: {data_filename}")
     
-    # 然后绘制并保存收敛曲线
-    plt.figure(figsize=(10, 6))
-    plt.plot(max_fitness_history, label='Max Fitness')
-    plt.plot(avg_fitness_history, label='Average Fitness')
-    plt.xlabel('Generation')
-    plt.ylabel('Fitness')
-    plt.title(f'Convergence (Run {run_id})')
-    plt.legend()
-    plt.grid(True)
+    # # 然后绘制并保存收敛曲线
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(max_fitness_history, label='Max Fitness')
+    # plt.plot(avg_fitness_history, label='Average Fitness')
+    # plt.xlabel('Generation')
+    # plt.ylabel('Fitness')
+    # plt.title(f'Convergence (Run {run_id})')
+    # plt.legend()
+    # plt.grid(True)
     
-    plot_filename = os.path.join(result_path, f"fitness_convergence_{timestamp}_run{run_id}.png")
-    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
-    print(f"收敛曲线已保存至: {plot_filename}")
-    plt.show()
+    # plot_filename = os.path.join(result_path, f"fitness_convergence_{timestamp}_run{run_id}.png")
+    # plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    # print(f"收敛曲线已保存至: {plot_filename}")
+    # plt.show()
     
     return matrix, nowPopulation, max_fitness_history[-1]
 

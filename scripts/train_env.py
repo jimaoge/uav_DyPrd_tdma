@@ -38,6 +38,7 @@ def run():
         }        
         total_step_count = config.DQN_PARAMS['max_steps_per_episode']
         for step_count in range(total_step_count):
+            print()
             print(f"-----当前step_count:{step_count}/{total_step_count},episode:{ep}/{total_episodes}-----")
             state = env.get_current_state()
             action = agent.choose_action(state, Epsilon)

@@ -25,8 +25,6 @@ MEMORY_CAPACITY = config.DQN_PARAMS['MEMORY_CAPACITY']  # 经验回放的容量
 TARGET_UPDATE = config.DQN_PARAMS['TARGET_UPDATE']  # target网络更新的频率
 GAMMA = config.DQN_PARAMS['GAMMA']  # 回报折扣率
 LR = config.DQN_PARAMS['LR']  # 学习率
-Episodes_number = config.DQN_PARAMS['Episodes_number']  # 训练与测试的总轮次
-Test_episodes_number = config.DQN_PARAMS['Test_episodes_number']  # 测试的轮次
 MODEL_PATH = config.DATA_PATHS['saved_dqn_models_path']  # DQN深度神经网络参数的保存路径
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -139,7 +137,7 @@ class DQN(object):
         """训练DQN网络"""
         # 如果经验回放池不够大，不进行训练
         if len(self.replay_queue) < BATCH_SIZE:
-            print(f"经验回放池不够大，当前长度：{len(self.replay_queue)}")
+            print(f"经验回放池不够大，当前长度：{len(self.replay_queue)}/{BATCH_SIZE}")
             return
 
         self.learn_step_counter += 1

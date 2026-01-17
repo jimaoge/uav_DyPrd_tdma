@@ -39,21 +39,19 @@ class UAVConfig:
             'STATE_DIM': STATE_DIM,     # 策略网络和目标网络输入的长度:状态空间的维度
             'ACTION_DIM': 10,           # 策略网络和目标网络输出的长度:动作空间的维度
             'BATCH_SIZE': 128,          # batch_size
-            'MEMORY_CAPACITY': 2000,    # 经验回放的容量
+            'MEMORY_CAPACITY': 6000,    # 经验回放的容量
             'TARGET_UPDATE': 400,       # target网络更新的频率
             'GAMMA': 0.9,               # 回报折扣率
             'LR': 0.002,                # 学习率
-            'Episodes_number': 1000,    # 训练与测试的总轮次
-            'Test_episodes_number': 600,  # 测试的轮次
             'DQN_k': DQN_k,             # DQN需要输入历史k - 1个链路动态性
-            'max_time': 15000,          # DQN训练最大处理时间范围
+            'max_time': 15000,          # DQN训练数据的最大处理时间范围
             'max_steps_per_episode': 100,  # 每个episode包含几轮周期/几次DyPrd决策
             'total_episode_in_train': 500,  # 一次训练包含多少个episode
             'DQN_train_save_interval': 10,  # 每多少个episode保存一次指标
             'slot_reward_ratio': 1.0,       # 计算奖励时，时隙吞吐量的占比
             'epsilon_start': 0.9,           # 随机探索率的初始值
-            'epsilon_end' : 0.03,           # 随机探索率的最小值
-            'epsilon_decay' : 0.995,        # 衰减率
+            'epsilon_end' : 0.05,           # 随机探索率的最小值
+            'epsilon_decay' : 0.985,        # 衰减率
         }
      
         # ---------- LSTM数据预处理参数 ----------
