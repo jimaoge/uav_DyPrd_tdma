@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -364,7 +365,6 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
         save_population(nowPopulation)
         
     maxFitTemp = 0 - N_2
-    maxFit = 0
     maxFitIndex = 0
     T = N_GENERATIONS
     # 添加记录适应度历史的列表
@@ -377,7 +377,9 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
 
     while T:
         T -= 1
-        
+        # 定期打印训练信息
+        if T % 100 == 0:
+            print(f"遗传算法训练迭代剩余{T}次, 目前最大适应度：{global_max_fit}")        
         # 1. 计算当前种群的适应度
         if weight_list is not None and len(weight_list) > 0:  # weight_list不为None且非空
             cal_fitness(neib_list, weight_list)

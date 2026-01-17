@@ -14,17 +14,21 @@ from config.config import config
 def run():
     env = SelfOrganizingNetworkEnv()
     agent = DQN()
-    Epsilon = 0.9
+    epsilon_start = config.DQN_PARAMS['epsilon_start']
+    epsilon_end = config.DQN_PARAMS['epsilon_end']
+    epsilon_decay = config.DQN_PARAMS['epsilon_decay']
+    Epsilon = epsilon_start
     
-    data_dir = config.DATA_PATHS['DQN_train_result_path']
+    data_dir = config.DATA_PATHS['DQN_train_result_path']   # "results" / "DQN_training"
     os.makedirs(data_dir, exist_ok=True)  # 创建保存数据的目录
     
     all_episodes_data = []  # 存储所有episode的数据
-    save_interval = config.DQN_PARAMS.get('DQN_train_save_interval', 10)
-    
-    for ep in range(config.DQN_PARAMS['total_episode_in_train']):
+    env.load_scalers_list() # 加载归一化器
+    print("所有节点归一化器已加载")
+    total_episodes = config.DQN_PARAMS['total_episode_in_train']
+    for ep in range(total_episodes):
         # Epsilon衰减
-        Epsilon = max(0.1, Epsilon * 0.95)
+        Epsilon = max(epsilon_end, epsilon_decay * Epsilon)
         state = env.reset_random_time()
         
         # 记录每个episode的数据
@@ -32,8 +36,9 @@ def run():
             "episode": ep,
             "steps": []
         }        
-        
-        for step_count in range(config.DQN_PARAMS['max_steps_per_episode']):
+        total_step_count = config.DQN_PARAMS['max_steps_per_episode']
+        for step_count in range(total_step_count):
+            print(f"-----当前step_count:{step_count}/{total_step_count},episode:{ep}/{total_episodes}-----")
             state = env.get_current_state()
             action = agent.choose_action(state, Epsilon)
             state_next, reward, done = env.step(action)

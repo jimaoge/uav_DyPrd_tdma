@@ -2,7 +2,7 @@
 
 import glob
 import os
-import np
+import numpy as np
 import pickle
 import joblib
 import pandas as pd
@@ -33,6 +33,7 @@ class SelfOrganizingNetworkEnv:
         self.path = data_path  # 轨迹原始数据所在路径
         self.datafile_path = self.path / config.DATA_PATHS['traj_data_file_name']  # 拼接轨迹原始数据文件名
         self.data = pd.read_csv(self.datafile_path, comment='#')  # 轨迹原始数据
+        print("原始轨迹数据已读取")
         self.scaler_path = config.DATA_PATHS['processed_traj_data']
         self.node_nums = config.ENV_PARAMS['uav_nums']
         self.slot_nums = config.ENV_PARAMS['slot_nums']
@@ -45,6 +46,7 @@ class SelfOrganizingNetworkEnv:
         self.T_sum = 0
         self.diff = []   # 本轮拓扑预测和实际拓扑邻接矩阵的差异数的数组，长度为DyPrd
         self.coll = 0   # 本轮时隙分配方案在真实环境下的时隙冲突总数量，由DyPrd个数相加而成
+        self.slot_reward_ratio = config.DQN_PARAMS['slot_reward_ratio']
         self.DQN_k = config.DQN_PARAMS['DQN_k']
         self.scalers_list = []
 
@@ -78,14 +80,15 @@ class SelfOrganizingNetworkEnv:
             ).to(device)
             
             # 构建模型文件路径
-            lstm_path = config.DATA_PATHS['saved_lstm_models_path'] + f"/mtlone{i}.pkl"
+            lstm_path = config.DATA_PATHS['saved_lstm_models_path'] / f"model_node_{i}.pth"
             
-            # 加载模型权重
-            # torch.load加载保存的pkl模型文件，是一个字典，通过键'models'提取对应的值
-            # 将提取出的状态字典加载到新初始化的LSTM模型实例（model）中。这一步使模型获得预训练的参数
-            model.load_state_dict(torch.load(lstm_path)['models'])
+            # 直接加载模型权重
+            model.load_state_dict(torch.load(lstm_path, weights_only=True))
             # 如果需要在CPU上加载，使用下面这行注释掉的代码
-            # model.load_state_dict(torch.load(lstm_path, map_location=torch.device('cpu'))['models'])
+            # model.load_state_dict(torch.load(lstm_path, map_location=torch.device('cpu')))
+            
+            # 将模型设置为评估模式
+            model.eval()
             
             # 将模型添加到列表
             self.lstm_models.append(model)
@@ -116,7 +119,8 @@ class SelfOrganizingNetworkEnv:
     def reset_random_time(self):
         # 在可用轨迹范围内随机选择起始点
         max_start_time = config.DQN_PARAMS['max_time']
-        self.current_time = random.randint(50, max_start_time - 1000)
+        self.cur_prd_start_time = random.randint(50, max_start_time - 1000)
+        print(f"环境随机初始化开始时间为{self.cur_prd_start_time}s")
         self.next_prd_start_time = self.cur_prd_start_time
         # 重置应用周期DyPrd
         self.pre_DyPrd = 2
@@ -176,7 +180,7 @@ class SelfOrganizingNetworkEnv:
         # print(f"diff:{self.diff}")
         
         # 通过遗传算法生成时隙分配矩阵
-        slot_allocation_matrix = genetic_algorithm(predicted_topology, weight_list = [])
+        slot_allocation_matrix, population, max_fitness = genetic_algorithm(predicted_topology, weight_list = [])
         # 保存分配方案
         # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
 
@@ -265,8 +269,8 @@ class SelfOrganizingNetworkEnv:
             num_nodes = len(node_positions)
             
             # 检查节点数量是否与网络节点数一致
-            if num_nodes != self.num_nodes:
-                raise ValueError(f"Time {t}: Node count {num_nodes} does not match network node count {self.num_nodes}")
+            if num_nodes != self.node_nums:
+                raise ValueError(f"Time {t}: Node count {num_nodes} does not match network node count {self.node_nums}")
             
             # 初始化拓扑矩阵为全0，表示无连接
             cur_link_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
@@ -396,7 +400,7 @@ class SelfOrganizingNetworkEnv:
         start_time = max(end_time - 23, 0)  # 计算起始时间，确保时间窗口长度为24个时间单位
         
         for node_index in range(9):
-            scaler = self.scalers[node_index]
+            scaler = self.scalers_list[node_index]
             # 获得各个节点的未归一化实际轨迹数据，用于输入lstm进行拓扑推演
             node_specific_data = self.data[self.data['Node'] == node_index]
             # 从 node_specific_data（该节点的完整轨迹数据）选取从start_time到end_time的数据
@@ -407,7 +411,7 @@ class SelfOrganizingNetworkEnv:
             # print(f"Shape of node_data: {node_data.shape}")
 
             input_sequence = scaler.transform(node_data.values) # 对输入数据进行归一化
-            input_sequence = input_sequence.reshape(1, 24, 3)
+            input_sequence = input_sequence.reshape(1, 24, 3)  # 输入维度为(1, 24, 3)
             input_tensor = torch.tensor(input_sequence, dtype=torch.float32).to(device)
 
             model = self.lstm_models[node_index]
@@ -417,20 +421,13 @@ class SelfOrganizingNetworkEnv:
                 model_output = model(input_tensor)
 
             # 将模型输出转移到CPU，然后转换为NumPy数组
-            model_output = model_output.cpu().numpy()  # (3,1,12)
-            model_output_squeezed = np.squeeze(model_output, axis=1)
-
-            # print(model_output_squeezed.shape)  # 输出应为 (3, 12)
-
-            model_output_transposed = model_output_squeezed.transpose()  # 转置
-
-            # print(model_output_transposed.shape)
-            
+            model_output = model_output.cpu().numpy()  # 这里输出维度为(1, 12, 3)
+            model_output_squeezed = np.squeeze(model_output, axis=0)  # 得到维度 (12, 3)            
             # 对预测结果进行反归一化
-            predictions = scaler.inverse_transform(model_output_transposed)
-
-            # print(f"predictions:{predictions.shape}")
-            
+            predictions = scaler.inverse_transform(model_output_squeezed)
+            if DyPrd > predictions.shape[0]:
+                raise ValueError(f"DyPrd={DyPrd}超过LSTM预测步数{predictions.shape[0]}")    
+                    
             predicted_position = predictions[0:DyPrd, :]  # 获取前DyPrd个预测结果
             # predicted_positions列表包含了9个节点的预测轨迹，每个轨迹是形状为 (DyPrd, 3)的数组
             predicted_trajectories.append(predicted_position)
@@ -472,26 +469,35 @@ class SelfOrganizingNetworkEnv:
         # slot_matrix为去除时隙冲突之后的时隙分配矩阵数组，包含DyPrd个无冲突矩阵
         # col_list为包含了DyPrd个冲突时隙数的数组
         slot_matrix, col_list = self.cal_collision(rel_topology, slot_allocation_matrix)
-        # print(f"去除冲突之后的时隙分配矩阵：\n{slot_matrix}")
+        slot_matrix_array = np.array(slot_matrix)
+        print(f"去除冲突之后的时隙分配矩阵形状为{slot_matrix_array.shape}")
         self.coll = sum(col_list)
-        # print(f"时隙分配矩阵在真实环境下的时隙冲突数量：\n{self.coll}")
+        
         N = self.node_nums  # 节点的数量
         C = 1  # 每个链路在一个时隙内可以传输的数据量，1代表吞吐量=时隙数
+        DyPrd_len = len(slot_matrix)  # 获取时隙分配矩阵的数量
 
         # 初始化总时延和总吞吐量
         self.T_sum = 0
 
-        # 遍历每个节点计算时延和吞吐量
-        for j in range(N):
-            # 计算单个节点的吞吐量
-            T_j = sum(slot_matrix[j]) * C
-            # 累加到总吞吐量
-            self.T_sum += T_j
-            
+        # 遍历每个时隙分配矩阵
+        for t in range(DyPrd_len):
+            # 获取当前时间的时隙分配矩阵
+            current_slot_matrix = slot_matrix[t]
+            # 遍历每个节点计算吞吐量
+            for j in range(N):
+                # 计算单个节点的吞吐量
+                T_j = sum(current_slot_matrix[j]) * C
+                # 累加到总吞吐量
+                self.T_sum += T_j
+        
+        # 或者使用更简洁的numpy方式：
+        # self.T_sum = np.sum(slot_matrix_array) * C
+        
         # 更新时隙分配方案占用的吞吐量
         boardcast_cost = config.ENV_PARAMS['boardcast_cost']
         # 计算奖励
-        reward = self.gamma * (self.T_sum - boardcast_cost) / self.DyPrd - 0.3 * sum(self.diff) - self.coll
+        reward = self.slot_reward_ratio * (self.T_sum - boardcast_cost) / self.DyPrd - 0.3 * sum(self.diff) - self.coll
 
         return reward
     

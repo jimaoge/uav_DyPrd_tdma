@@ -6,6 +6,13 @@ class UAVConfig:
     """UAV网络TDMA时隙分配系统配置"""
     
     def __init__(self):
+        # ---------- 环境参数 ----------
+        self.ENV_PARAMS = {
+            'uav_nums': 9,         # UAV数量
+            'communication_range': 300, # 通信范围(米)
+            'slot_nums': 9,        # 时隙数量
+            'boardcast_cost': 3     # 每轮周期所需的更新时隙分配方案的开销时隙数
+        }
         # ---------- 基础路径 ----------
         # 获取项目根目录（config.py所在目录的父目录）
         self.PROJECT_ROOT = Path(__file__).parent.parent
@@ -26,10 +33,8 @@ class UAVConfig:
         }
         
         # ---------- DQN参数（DyPrd决策） ----------        
-        uav_nums = self.ENV_PARAMS['uav_nums']
-        LENGTH = 10  # 假设LENGTH为5，这是计算STATE_DIM所需的值
-        # 计算STATE_DIM
-        STATE_DIM = uav_nums * uav_nums + (uav_nums * 2 + LENGTH * 3) * uav_nums
+        DQN_k = 6
+        STATE_DIM = 3 * (DQN_k - 1) + 1
         self.DQN_PARAMS = {
             'STATE_DIM': STATE_DIM,     # 策略网络和目标网络输入的长度:状态空间的维度
             'ACTION_DIM': 10,           # 策略网络和目标网络输出的长度:动作空间的维度
@@ -40,12 +45,15 @@ class UAVConfig:
             'LR': 0.002,                # 学习率
             'Episodes_number': 1000,    # 训练与测试的总轮次
             'Test_episodes_number': 600,  # 测试的轮次
-            'LENGTH': LENGTH,             # 存储LENGTH值
-            'DQN_k': 6,                   # DQN需要输入历史k - 1个链路动态性
-            'max_time': 15000,            # DQN训练最大处理时间范围
+            'DQN_k': DQN_k,             # DQN需要输入历史k - 1个链路动态性
+            'max_time': 15000,          # DQN训练最大处理时间范围
             'max_steps_per_episode': 100,  # 每个episode包含几轮周期/几次DyPrd决策
             'total_episode_in_train': 500,  # 一次训练包含多少个episode
-            'DQN_train_save_interval': 10  # 每多少个episode保存一次指标
+            'DQN_train_save_interval': 10,  # 每多少个episode保存一次指标
+            'slot_reward_ratio': 1.0,       # 计算奖励时，时隙吞吐量的占比
+            'epsilon_start': 0.9,           # 随机探索率的初始值
+            'epsilon_end' : 0.03,           # 随机探索率的最小值
+            'epsilon_decay' : 0.995,        # 衰减率
         }
      
         # ---------- LSTM数据预处理参数 ----------
@@ -60,7 +68,9 @@ class UAVConfig:
                 
         # ---------- LSTM拓扑预测参数 ----------
         self.LSTM_PARAMS = {
-            'epochs': 100,           
+            'seq_len': 24,          # 输入序列长度 (历史轨迹点数)
+            'pred_steps': 12,       # 输出序列长度 (预测轨迹点数)
+            'epochs': 60,           
             'batch_size': 32,   # 批量大小，每次训练时输入模型的样本数
             'input_size': 3,      # xyz位置
             'hidden_size': 128,   # LSTM隐藏层维度，决定模型记忆和表达能力
@@ -81,7 +91,7 @@ class UAVConfig:
             'population_size' : 100,  # 种群的个体数量
             'probability_of_cross' : 0.6,  # 交叉概率
             'probability_of_mutate' : 0.05,  # 变异概率
-            'number_of_generation' : 3000,  # 主算法循环次数
+            'number_of_generation' : 300,  # 主算法循环次数
             'number_of_node' : 9,
             'number_of_slot' : 9
         }
@@ -89,20 +99,6 @@ class UAVConfig:
         
         # ---------- DyPrd决策选项 ----------
         self.DYPRD_OPTIONS = []  # 秒
-        
-        # ---------- 环境参数 ----------
-        self.ENV_PARAMS = {
-            'uav_nums': 9,         # UAV数量
-            'communication_range': 300, # 通信范围(米)
-            'slot_nums': 9,        # 时隙数量
-            'boardcast_cost': 3     # 每轮周期所需的更新时隙分配方案的开销时隙数
-        }
-        
-    # def get_lstm_model_path(self, model_name="lstm_model.pth"):
-    #     """获取LSTM模型保存路径"""
-    #     model_dir = self.PROJECT_ROOT / "models" / "lstm"
-    #     model_dir.mkdir(parents=True, exist_ok=True)
-    #     return str(model_dir / model_name)
 
 # 创建全局配置实例
 config = UAVConfig()
