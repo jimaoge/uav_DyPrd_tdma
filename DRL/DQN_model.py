@@ -189,15 +189,43 @@ class DQN(object):
         """
         return sample(self.replay_queue, batch_size)
     
-    def save_model(self, path = MODEL_PATH):
+    def save_model(self, model_dir=MODEL_PATH, filename="dqn_model.pth"):
+        """
+        保存DQN模型参数
+        Args:
+            model_dir: 保存模型文件的目录路径
+            filename: 模型文件名，默认"dqn_model.pth"
+        """
+        if not model_dir.exists():
+            model_dir.mkdir(parents=True, exist_ok=True)
+        
+        model_path = model_dir / filename
+        
         torch.save({
             'policy_net': self.policy_net.state_dict(),
             'target_net': self.target_net.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-        }, path)
+        }, model_path)
         
-    def load_model(self, path = MODEL_PATH):
-        checkpoint = torch.load(path)
+        print(f"模型已保存到: {model_path}")
+        
+    def load_model(self, model_dir=MODEL_PATH, filename="dqn_model.pth"):
+        """
+        加载DQN模型参数
+        Args:
+            model_dir: 模型文件所在的目录路径
+            filename: 模型文件名，默认"dqn_model.pth"
+        """
+        # 构建完整的文件路径
+        model_path = model_dir / filename
+        
+        # 加载模型
+        checkpoint = torch.load(model_path)
         self.policy_net.load_state_dict(checkpoint['policy_net'])
         self.target_net.load_state_dict(checkpoint['target_net'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        
+        # 只有当优化器状态存在时才加载
+        if 'optimizer' in checkpoint:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+        
+        print(f"模型从 {model_path} 加载成功")

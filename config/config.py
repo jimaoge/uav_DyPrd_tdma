@@ -79,10 +79,6 @@ class UAVConfig:
             'dropout': 0.1,        # 每个mini-batch都会随机丢弃dropout比例的神经元，使网络不依赖于任何特定的神经元，增强了鲁棒性
         }
         
-        # ---------- 训练参数 ----------
-        self.DQN_TRAINING_PARAMS = {
-        }
-        
         # ---------- 遗传算法参数 ----------
         self.GA_PARAMS = {
             'N^2':  81,  # N的平方
@@ -94,9 +90,6 @@ class UAVConfig:
             'number_of_slot' : 9
         }
         
-        
-        # ---------- DyPrd决策选项 ----------
-        self.DYPRD_OPTIONS = []  # 秒
 
 # 创建全局配置实例
 config = UAVConfig()

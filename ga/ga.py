@@ -362,7 +362,7 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
     else:
         # 没有提供种群P时，完全随机初始化种群
         initialize_random()
-        save_population(nowPopulation)
+        # save_population(nowPopulation)
         
     maxFitTemp = 0 - N_2
     maxFitIndex = 0

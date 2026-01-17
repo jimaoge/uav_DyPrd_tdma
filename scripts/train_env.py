@@ -27,6 +27,7 @@ def run():
     print("所有节点归一化器已加载")
     total_episodes = config.DQN_PARAMS['total_episode_in_train']
     for ep in range(total_episodes):
+        print()
         # Epsilon衰减
         Epsilon = max(epsilon_end, epsilon_decay * Epsilon)
         state = env.reset_random_time()
@@ -85,6 +86,8 @@ def run():
     final_data_path = os.path.join(data_dir, "training_data_final.json")
     with open(final_data_path, 'w', encoding='utf-8') as f:
         json.dump(all_episodes_data, f, indent=2, ensure_ascii=False)
+    
+    print("训练完成")
             
             
 if __name__ == "__main__":
