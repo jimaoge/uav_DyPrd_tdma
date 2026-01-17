@@ -49,11 +49,19 @@ def run():
             state_next, reward, done = env.step(action)
             agent.remember(state, action, state_next, reward)
             agent.train()  # 在线学习
-            
+
+            state_list = state.tolist()  # 转列表
+            state_15 = state_list[:-1]   # 去掉最后一位，保留前15位
+            # 手动切分成5组，每组3个值
+            state_5x3 = [state_15[i*3 : (i+1)*3] for i in range(5)]
+            # 按列求平均值
+            link_dynamic = [
+                sum(col) / len(col) for col in zip(*state_5x3)
+            ]            
             # 记录当前step的数据
             step_data = {
                 "step": step_count,
-                "state": state.tolist(),
+                "link_dynamic": link_dynamic,
                 "action": int(action),
                 "DyPrd": env.DyPrd,
                 "topo_diff": sum(env.diff),
