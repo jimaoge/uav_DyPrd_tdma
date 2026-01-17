@@ -2,6 +2,8 @@ import sys
 import json
 import numpy as np
 import os
+from decimal import Decimal
+import torch
 from pathlib import Path
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
@@ -10,6 +12,7 @@ sys.path.append(str(project_root))
 from environment.env import SelfOrganizingNetworkEnv
 from DRL.DQN_model import DQN
 from config.config import config
+from utils.utils import NumpyEncoder
 
 def run():
     env = SelfOrganizingNetworkEnv()
@@ -77,7 +80,7 @@ def run():
         #     # 保存数据检查点
         #     data_path = os.path.join(data_dir, f"training_data_ep{start_ep}_to_ep{ep}.json")
         #     with open(data_path, 'w', encoding='utf-8') as f:
-        #         json.dump(recent_episodes, f, indent=2, ensure_ascii=False)
+        #         json.dump(recent_episodes, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
     
     # 训练结束后保存最终模型
     agent.save_model()
@@ -85,7 +88,7 @@ def run():
     # 保存最终完整数据
     final_data_path = os.path.join(data_dir, "training_data_final.json")
     with open(final_data_path, 'w', encoding='utf-8') as f:
-        json.dump(all_episodes_data, f, indent=2, ensure_ascii=False)
+        json.dump(all_episodes_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
     
     print("训练完成")
             

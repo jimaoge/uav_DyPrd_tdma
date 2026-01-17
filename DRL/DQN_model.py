@@ -146,11 +146,11 @@ class DQN(object):
         transitions = self.sample(BATCH_SIZE)
         batch = Transition(*zip(*transitions))  # 重组为批次的Transition
 
-        # 将批次数据转换为PyTorch张量，并移到指定设备
-        state_batch = torch.tensor(batch.state, dtype=torch.float32).to(device)
-        action_batch = torch.tensor(batch.action, dtype=torch.long).unsqueeze(-1).to(device)
-        reward_batch = torch.tensor(batch.reward, dtype=torch.float32).unsqueeze(-1).to(device)
-        state_next_batch = torch.tensor(batch.state_next, dtype=torch.float32).to(device)
+        # ========== 核心修复+优化：张量转换部分（原警告位置） ==========
+        state_batch = torch.tensor(np.array(batch.state), dtype=torch.float32, device=device)
+        action_batch = torch.tensor(np.array(batch.action), dtype=torch.long, device=device).unsqueeze(-1)
+        reward_batch = torch.tensor(np.array(batch.reward), dtype=torch.float32, device=device).unsqueeze(-1)
+        state_next_batch = torch.tensor(np.array(batch.state_next), dtype=torch.float32, device=device)
 
         # 计算当前状态的Q值
         # gather(1, action_batch)选择执行动作对应的Q值
@@ -169,6 +169,7 @@ class DQN(object):
         # 反向传播和优化
         self.optimizer.zero_grad()  # 清空梯度
         loss.backward()  # 反向传播计算梯度
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0) # 梯度裁剪，max_norm可根据需求调1~5
         self.optimizer.step()  # 更新网络参数
 
         # 定期打印训练信息

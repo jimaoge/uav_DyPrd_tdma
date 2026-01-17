@@ -1,0 +1,2 @@
+# 运行指令
+python3 -u ./scripts/train_env.py > ./results/DQN_training/output.txt
