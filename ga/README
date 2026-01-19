@@ -1,0 +1,11 @@
+【初始化】→ nowPopulation(初始种群，无残留)
+    ↓ 每轮迭代执行一次
+【适应度计算】→ nowPopulation(赋值适应度/概率)
+    ↓
+【select()】→ midPopulation.clear() → 写入精英+选择个体 → nowPopulation.clear() → nowPopulation = midPopulation → midPopulation.clear()
+    ↓
+【crossover()】→ nextPopulation.clear() → 写入交叉子代 → midPopulation.clear()
+    ↓
+【mutation()】→ nowPopulation.clear() → 写入变异子代 → nextPopulation.clear()
+    ↓
+【迭代结束】→ nowPopulation(下一代种群，纯净无残留)

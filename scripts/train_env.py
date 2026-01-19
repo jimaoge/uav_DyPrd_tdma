@@ -75,20 +75,20 @@ def run():
         # 保存当前episode的数据到内存
         all_episodes_data.append(episode_data)      
         
-        # # 只在定期保存检查点时保存数据
-        # if (ep + 1) % save_interval == 0:
-        #     # 保存模型检查点
-        #     checkpoint_path = os.path.join(config.MODEL_PATH, f"dqn_checkpoint_ep{ep}.pth")
-        #     agent.save_model(checkpoint_path)
+        # 只在定期保存检查点时保存数据
+        save_interval = 50
+        if (ep + 1) % save_interval == 0:
+            # 保存模型检查点
+            agent.save_model(filename=f"dqn_checkpoint_ep{ep}.pth")
             
-        #     # 只保存当前检查点周期的数据（最后save_interval个episode）
-        #     start_ep = max(0, ep - save_interval + 1)
-        #     recent_episodes = all_episodes_data[start_ep:ep+1]
+            # # 只保存当前检查点周期的数据（最后save_interval个episode）
+            # start_ep = max(0, ep - save_interval + 1)
+            # recent_episodes = all_episodes_data[start_ep:ep+1]
             
-        #     # 保存数据检查点
-        #     data_path = os.path.join(data_dir, f"training_data_ep{start_ep}_to_ep{ep}.json")
-        #     with open(data_path, 'w', encoding='utf-8') as f:
-        #         json.dump(recent_episodes, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+            # # 保存数据检查点
+            # data_path = os.path.join(data_dir, f"training_data_ep{start_ep}_to_ep{ep}.json")
+            # with open(data_path, 'w', encoding='utf-8') as f:
+            #     json.dump(recent_episodes, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
     
     # 训练结束后保存最终模型
     agent.save_model()

@@ -1,14 +1,15 @@
-import math
 import pickle
 import random
-import time
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-import json
 import sys
-from datetime import datetime
 from pathlib import Path
+
+nowPopulation = []  # 当前种群
+midPopulation = []
+nextPopulation = []
+
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
@@ -18,13 +19,14 @@ sys.path.append(str(project_root))
 from config.config import config
 
 # 定义一些参数
-N_2 = config.GA_PARAMS['N^2']  # 你的 N_2 值
+N_2 = config.GA_PARAMS['N^2']  # NODE_NUM * SLOT_NUM, 个体的二进制序列长度
 POP_SIZE = config.GA_PARAMS['population_size']
 PC = config.GA_PARAMS['probability_of_cross']  # 交叉概率
 PM = config.GA_PARAMS['probability_of_mutate']  # 变异概率
 N_GENERATIONS = config.GA_PARAMS['number_of_generation']  # 主算法循环次数
 NODE_NUM = config.GA_PARAMS['number_of_node']
 SLOT_NUM = config.GA_PARAMS['number_of_slot']
+assert N_2 == NODE_NUM * SLOT_NUM, f"参数错误:N_2={N_2} 必须等于 NODE_NUM({NODE_NUM}) * SLOT_NUM({SLOT_NUM})"
 
 
 def load_topology_from_json(filename):
@@ -83,7 +85,7 @@ def load_topology_from_json(filename):
     
     return neib_list, weight_list, data
 
-# 根据一跳邻居矩阵生成两条邻居矩阵
+# 根据一跳邻居矩阵生成二跳邻居矩阵（一跳+二跳邻居，对角线置0，无自冲突）
 def one_two_neighbors(one_hop_neighbors):
     num_nodes = len(one_hop_neighbors)
     two_hop_neighbors = [[0] * num_nodes for _ in range(num_nodes)]
@@ -95,10 +97,10 @@ def one_two_neighbors(one_hop_neighbors):
                 for k in range(num_nodes):
                     if one_hop_neighbors[j][k] == 1 and i != k:
                         two_hop_neighbors[i][k] = 1
-
+        two_hop_neighbors[i][i] = 0  # 对角线置0，节点自己不是自己的邻居
     return two_hop_neighbors
 
-# 表示遗传算法中的一个个体（时隙分配方案），每个个体有一个二进制序列（长度81=9节点×9时隙），包含适应度、选择概率等属性
+# 表示遗传算法中的一个个体（时隙分配方案），每个个体有一个二进制序列（长度81=9节点*9时隙），包含适应度、选择概率等属性
 class Individual:
     def __init__(self, m_Sequence):
         self.Sequence = m_Sequence
@@ -109,7 +111,7 @@ class Individual:
     def Get_Sequence(self):
         return self.Sequence
 
-    def chaFitness(self, m_Fitness):
+    def set_Fitness(self, m_Fitness):
         self.Fitness = m_Fitness
 
     def Get_Fitness(self):
@@ -127,212 +129,187 @@ class Individual:
     def set_Sum_P_Fitness(self, mSum_P_Fitness):
         self.Sum_P_Fitness = mSum_P_Fitness
 
-nowPopulation = []
-midPopulation = []
-nextPopulation = []
-# fit = []
-
 # 随机生成初始种群，每个个体是长度为81的随机二进制序列
 def initialize_random():
+    global nowPopulation
+    nowPopulation.clear()
     for i in range(POP_SIZE):
-        X = [0] * N_2
-        for j in range(N_2):
-            if custom_random() <= 0.5:
-                X[j] = 0
-            else:
-                X[j] = 1
+        X = [random.randint(0, 1) for _ in range(N_2)]
         indivi = Individual(X)
         nowPopulation.append(indivi)
     print(f"随机生成初始种群");
 
-# 自定义随机数生成函数，范围(0, 1)
-def custom_random():
-    N = random.randint(0, 999)
-    return N / 1000.0
-
-# 计算个体的适应度，考虑多个拓扑结构的加权适应度，
-# 包含三个部分：
-# 激活时隙奖励（+1分）
-# 邻居节点冲突惩罚（-2×81分）
-# 全零节点惩罚（-81分）
+# 考虑拓扑推演结果的多个拓扑, 计算个体的适应度
+# 首先计算在每个拓扑上的:
+# 初始值为激活时隙奖励 - 82，因为激活时隙奖励最大为81，保证为负数
+# 激活时隙奖励, 有一个1就+1分, 不考虑冲突与否
+# 邻居节点冲突惩罚，遍历所有时隙，发现一个冲突就-2分
+# 全零节点惩罚，遍历所有节点，发现一个全零就-3分
+# 对所有拓扑的适应度求和后求平均得到个体在该拓扑推演结果上的适应度
+# 该函数目前只存在cal_fitness(neib_list)的调用，即weight_list均为None, 相当于等权重做平均
 def cal_fitness(neib_list, weight_list=None):
-    # 检查参数长度一致性
+    global nowPopulation
+    # 参数校验
+    if not neib_list:
+        raise ValueError("邻接矩阵列表neib_list不能为空，至少传入1个拓扑邻接矩阵")
     if weight_list is not None and len(weight_list) != len(neib_list):
         raise ValueError(f"weight_list长度({len(weight_list)})与neib_list长度({len(neib_list)})不一致")
-    
+    # 校验邻接矩阵维度合法性:必须是 NODE_NUM * NODE_NUM 的二维矩阵
+    for idx, mat in enumerate(neib_list):
+        if len(mat) != NODE_NUM or any(len(row) != NODE_NUM for row in mat):
+            raise ValueError(f"第{idx+1}个邻接矩阵维度错误，要求是{NODE_NUM}*{NODE_NUM}的二维矩阵")
+
+    if weight_list is None:
+        weight_list = [1.0 / len(neib_list)] * len(neib_list)
+    # NODE_NUM = SLOT_NUM = 9, N_2 = NODE_NUM * SLOT_NUM
+    PUNISH_CONFLICT = 2  # 冲突惩罚值
+    PUNISH_ZERO_NODE = 3     # 全零节点惩罚值
+
     for i in range(POP_SIZE):
         seq = nowPopulation[i].Get_Sequence()
         weighted_fitness = 0.0
+
+        # 激活时隙奖励，每个个体独立计算
+        active_count = sum(seq)
         
-        # 如果没有提供weight_list，则创建等权重列表
-        if weight_list is None:
-            weight_list = [1.0 / len(neib_list)] * len(neib_list)
-        
-        # 遍历三个拓扑和对应的权重
+        # 遍历所有拓扑+权重
         for neib_mat, weight in zip(neib_list, weight_list):
-            topo_fitness = 0.0
-            
-            # 1. 激活时隙奖励
-            active_count = sum(seq)
-            topo_fitness += active_count
-            
-            # 2. 邻居节点冲突惩罚
+            # 这里减去(N_2 + 1)是保证所有适应度均为负数,因为后续函数存在“分母为适应度求和”的情况,避免除零错误
+            topo_fitness = active_count - N_2 - 1
+
+            # 邻居节点冲突惩罚
             for slot in range(SLOT_NUM):
-                slot_start = slot * NODE_NUM
-                slot_end = (slot + 1) * NODE_NUM
-                slot_vals = seq[slot_start:slot_end]
-                
-                # 检查二跳内邻居冲突
+                slot_base_idx = slot * NODE_NUM
                 for ii in range(NODE_NUM):
+                    val_ii = seq[slot_base_idx + ii]
+                    if val_ii != 1:
+                        continue
                     for jj in range(ii + 1, NODE_NUM):
-                        if neib_mat[ii][jj] == 1:  # 使用当前拓扑的邻接矩阵
-                            if slot_vals[ii] == 1 and slot_vals[jj] == 1:
-                                topo_fitness -= 2 * N_2  # 冲突惩罚
-            
-            # 3. 全零节点惩罚
-            zero_nodes = 0
+                        if neib_mat[ii][jj] == 1 and seq[slot_base_idx + jj] == 1:
+                            topo_fitness -= PUNISH_CONFLICT
+
+            # 全零节点惩罚
             for node in range(NODE_NUM):
                 all_zeros = True
                 for slot in range(SLOT_NUM):
-                    idx = slot * NODE_NUM + node
-                    if seq[idx] != 0:
+                    if seq[slot * NODE_NUM + node] != 0:
                         all_zeros = False
                         break
                 if all_zeros:
-                    zero_nodes += 1
-                    topo_fitness -= N_2  # 全零节点惩罚
-            
-            # 加权当前拓扑的适应度
+                    # 全零惩罚
+                    topo_fitness -= PUNISH_ZERO_NODE
+
+            # 加权累加当前拓扑的适应度
             weighted_fitness += weight * topo_fitness
-        
-        nowPopulation[i].chaFitness(weighted_fitness)
+        nowPopulation[i].set_Fitness(weighted_fitness)
 
 # 根据个体适应度决定选择概率
 def cal_P_fitness():
-    sum_fitness = 0  # 适应度累计值
-    temp = 0  # 临时存放适应度概率
+    global nowPopulation
+    # 找到最小适应度（最负的值）
+    min_fitness = min(nowPopulation[i].Get_Fitness() for i in range(POP_SIZE))
+    
+    # 将所有适应度平移为正数
+    offset = -min_fitness + 1  # 确保最小值为1
+    adjusted_fitness_list = []
+    
     for i in range(POP_SIZE):
-        sum_fitness += nowPopulation[i].Get_Fitness()
-
-    for j in range(POP_SIZE):
-        temp = nowPopulation[j].Get_Fitness() / sum_fitness
-        nowPopulation[j].set_P_Fitness(temp)
+        adjusted_fitness = nowPopulation[i].Get_Fitness() + offset
+        adjusted_fitness_list.append(adjusted_fitness)
+    
+    # 3. 计算总和
+    sum_fitness = sum(adjusted_fitness_list)
+    
+    # 4. 计算概率
+    for i in range(POP_SIZE):
+        p = adjusted_fitness_list[i] / sum_fitness
+        nowPopulation[i].set_P_Fitness(p)
 
 # TODO: 实现适应度累计概率计算的代码
 def cal_Sum_fitness():
+    global nowPopulation
     summation = 0  # 累加值存放
     for i in range(POP_SIZE):
         summation += nowPopulation[i].Get_P_Fitness()
         nowPopulation[i].set_Sum_P_Fitness(summation)
 
-# 选择操作，保留25%的最佳个体，用轮盘赌选择剩下的75%
+# 选择操作，从nowPopulation保留25%的最佳个体，轮盘D选择剩下的75%，最后构成midPopulation
 def select():
-    max_fitness = nowPopulation[0].Get_Fitness()
-    max_id = 0
-    for p in range(POP_SIZE):
-        if max_fitness < nowPopulation[p].Get_Fitness():
-            max_fitness = nowPopulation[p].Get_Fitness()
-            max_id = p
+    global nowPopulation, midPopulation
+    #清空中间种群，防止上一轮数据残留
+    midPopulation.clear()
+    # 对种群按适应度从高到低排序，得到排序后的索引列表
+    sorted_pop_ids = sorted(range(POP_SIZE), key=lambda x: nowPopulation[x].Get_Fitness(), reverse=True)
+    # 取前 25% 的最优个体
+    elite_num = POP_SIZE // 4
+    for i in range(elite_num):
+        elite_id = sorted_pop_ids[i]
+        midPopulation.append(nowPopulation[elite_id])
 
-    for i in range(POP_SIZE // 4):
-        midPopulation.append(nowPopulation[max_id])
-
-    newPO_SIZE = POP_SIZE - POP_SIZE // 4
+    # 计算需要选择的普通个体数量
+    newPO_SIZE = POP_SIZE - elite_num
     array = [random.uniform(0.0, 1.0) for _ in range(newPO_SIZE)]
 
-    midFitness = nowPopulation[0].Get_Sum_P_Fitness()
-    # 轮盘进行选择
     for j in range(newPO_SIZE):
-        if array[j] < midFitness:
-            midPopulation.append(nowPopulation[0])  # 加入到中间种群
-        else:
-            for i in range(1, POP_SIZE):
-                if array[j] >= nowPopulation[i - 1].Get_Sum_P_Fitness() and array[j] <= nowPopulation[
-                    i].Get_Sum_P_Fitness():
-                    midPopulation.append(nowPopulation[i])  # 加入到中间种群
-                    break
+        rand_val = array[j]
+        # 遍历种群匹配累计概率
+        select_flag = False
+        for i in range(POP_SIZE):
+            if rand_val <= nowPopulation[i].Get_Sum_P_Fitness():
+                midPopulation.append(nowPopulation[i])
+                select_flag = True
+                break
+        # 兜底逻辑:防止随机数=1.0时匹配不到（边界防护）
+        if not select_flag:
+            midPopulation.append(nowPopulation[-1])
+            
+    nowPopulation.clear()  # 清空原种群
 
-    nowPopulation.clear()  # 清空nowpopulation
-
-# 在时隙边界（9的倍数位置）进行单点交叉
+# 对于select生成的midPopulation, 在时隙边界（9的倍数位置）进行单点交叉，最终生成nextPopulation
 def crossover():
+    global midPopulation, nextPopulation
     num = 0  # 记录次数
-    while num < POP_SIZE - 1:
+    nextPopulation.clear() # 前置清空，防止残留
+    while num < POP_SIZE:
         ranC = random.random()
-        array1 = midPopulation[num].Get_Sequence()[:]
-        array2 = midPopulation[num + 1].Get_Sequence()[:]
+        # 处理成对个体
+        if num < POP_SIZE - 1:
+            array1 = midPopulation[num].Get_Sequence()[:]
+            array2 = midPopulation[num + 1].Get_Sequence()[:]
 
-        if ranC <= PC:  # 如果随机小数小于交叉概率，则进行交叉操作
-            # crosspos = random.randint(1, N_2 - 1)  # 随机确定交叉点1-9
-            crosspos = 9 * random.randint(1, 8)  # 随机确定交叉点1-9
-
-            # 提取交叉序列片段
-            new_arr1 = array1[:crosspos] + array2[crosspos:]
-            new_arr2 = array2[:crosspos] + array1[crosspos:]
-
-            newChild1 = Individual(new_arr1)
-            newChild2 = Individual(new_arr2)
-            nextPopulation.extend([newChild1, newChild2])
+            if ranC <= PC:
+                crosspos = 9 * random.randint(1, 8)  # 时隙边界交叉
+                new_arr1 = array1[:crosspos] + array2[crosspos:]
+                new_arr2 = array2[:crosspos] + array1[crosspos:]
+                newChild1 = Individual(new_arr1)
+                newChild2 = Individual(new_arr2)
+                nextPopulation.extend([newChild1, newChild2])
+            else:
+                nextPopulation.extend([midPopulation[num], midPopulation[num + 1]])
+            num += 2
         else:
-            nextPopulation.extend([midPopulation[num], midPopulation[num + 1]])
-
-        num += 2
-
+            # 处理最后一个落单的个体，直接保留不交叉
+            nextPopulation.append(midPopulation[num])
+            num += 1
     midPopulation.clear()  # 清空 midPopulation
 
-# def crossover():
-#     num = 0
-#     while num < POP_SIZE - 1:
-#         # 获取父代序列
-#         seq1 = midPopulation[num].Get_Sequence()[:]
-#         seq2 = midPopulation[num + 1].Get_Sequence()[:]
-        
-#         # 创建子代序列
-#         child1_seq = []
-#         child2_seq = []
-        
-#         # 以时隙为单位进行交叉
-#         for slot in range(SLOT_NUM):
-#             slot_start = slot * NODE_NUM
-#             slot_end = (slot + 1) * NODE_NUM
-            
-#             # 使用相同的随机数决定是否交换该时隙
-#             if random.random() < PC:
-#                 # 交换整个时隙的分配
-#                 child1_seq.extend(seq2[slot_start:slot_end])
-#                 child2_seq.extend(seq1[slot_start:slot_end])
-#             else:
-#                 child1_seq.extend(seq1[slot_start:slot_end])
-#                 child2_seq.extend(seq2[slot_start:slot_end])
-        
-#         # 创建子代个体
-#         newChild1 = Individual(child1_seq)
-#         newChild2 = Individual(child2_seq)
-#         nextPopulation.extend([newChild1, newChild2])
-        
-#         num += 2
-    
-#     midPopulation.clear()
-
-
-# 随机交换两个位置的值
+# 对于crossover生成的nextPopulation, 随机交换两个位置的值，最终赋值给nowPopulation
 def mutation():
+    global nowPopulation, nextPopulation
+    nowPopulation.clear() # 前置清空，防止残留
     for i in range(POP_SIZE):
-        temp_seq = nextPopulation[i].Get_Sequence()[:]
+        temp_seq = nextPopulation[i].Sequence[:]
         ranM = random.random()
 
         if ranM <= PM:
-            # 随机选择两个位置进行交换
-            mu_arr = random.sample(range(N_2), 2)
-            temp = temp_seq[mu_arr[0]]
-            temp_seq[mu_arr[0]] = temp_seq[mu_arr[1]]
-            temp_seq[mu_arr[1]] = temp
+            # 随机选择1个位置进行二进制翻转
+            mu_pos = random.randint(0, N_2 -1)
+            temp_seq[mu_pos] = 1 - temp_seq[mu_pos] # 0→1，1→0
 
             muChild = Individual(temp_seq)
             nowPopulation.append(muChild)
         else:
             nowPopulation.append(nextPopulation[i])
-
     nextPopulation.clear()
 
 def select_top_individuals(P, top_n=10):
@@ -342,6 +319,8 @@ def select_top_individuals(P, top_n=10):
 
 # 用优秀个体+随机个体初始化种群，目的是加速收敛
 def initialize_with_top_individuals(top_individuals=[]):
+    global nowPopulation
+    nowPopulation.clear()
     nowPopulation.extend(top_individuals)
     remaining_size = POP_SIZE - len(top_individuals)
     for i in range(remaining_size):
@@ -351,7 +330,7 @@ def initialize_with_top_individuals(top_individuals=[]):
 
 # 主遗传算法循环，执行N_GENERATIONS代进化，记录每代最佳和平均适应度，保存结果和收敛曲线
 def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
-    global nowPopulation  # 使用global声明，以便修改全局变量
+    global nowPopulation, midPopulation, nextPopulation
     # 判断是否提供了种群P，若没有则初始化种群
     nowPopulation = []  # 确保种群从空开始
     if P is not None:
@@ -363,8 +342,7 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
         # 没有提供种群P时，完全随机初始化种群
         initialize_random()
         # save_population(nowPopulation)
-        
-    maxFitTemp = 0 - N_2
+    
     maxFitIndex = 0
     T = N_GENERATIONS
     # 添加记录适应度历史的列表
@@ -375,11 +353,7 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
     global_max_fit = float('-inf')
     global_max_fit_index = -1
 
-    while T:
-        T -= 1
-        # 定期打印训练信息
-        if T % 100 == 0:
-            print(f"遗传算法训练迭代剩余{T}次, 目前最大适应度：{global_max_fit}")        
+    while T: 
         # 1. 计算当前种群的适应度
         if weight_list is not None and len(weight_list) > 0:  # weight_list不为None且非空
             cal_fitness(neib_list, weight_list)
@@ -395,6 +369,7 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
         
         if maxFitTemp > global_max_fit:
             global_max_fit = maxFitTemp
+            global_max_fit_index = maxFitIndex  # 新增这一行，记录全局最优个体的索引
         
         # 3. 计算并记录当前种群的平均适应度
         avg_fitness = sum(indiv.Get_Fitness() for indiv in nowPopulation) / POP_SIZE
@@ -407,63 +382,22 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
         select()
         crossover()
         mutation()
-
+        # 定期打印训练信息
+        if T % 10 == 0:
+            print(f"遗传算法训练迭代剩余{T}次, 目前最大适应度:{global_max_fit}, 恢复偏移后为:{global_max_fit + 82}")  
+        T -= 1     
 
 
     # 输出算法运行的最终结果和运行时间
-    sequence_str = ', '.join(map(str, nowPopulation[maxFitIndex].Get_Sequence()))
-    # print(f"最佳解：{sequence_str}  最大适应度：{maxFit}")
+    # sequence_str = ', '.join(map(str, nowPopulation[global_max_fit_index].Get_Sequence()))
+    # print(f"最佳解:{sequence_str},全局最大适应度:{global_max_fit}")
 
 
     # 转换为矩阵
     assert len(nowPopulation[maxFitIndex].Get_Sequence()) == N_2, "列表长度不正确"
-    sequence = nowPopulation[maxFitIndex].Get_Sequence()
+    sequence = nowPopulation[global_max_fit_index].Get_Sequence() # 返回全局最优索引
     matrix = np.array(sequence).reshape(SLOT_NUM, NODE_NUM)
-    # print(f"遗传算法求解的时隙分配矩阵：\n{matrix}")
-    
-    # result_path = config.DATA_PATHS['saved_slots_matrix_path']
-    # # 确保结果目录存在
-    # os.makedirs('result', exist_ok=True)
-    
-    # # 创建带时间戳的唯一文件名
-    # timestamp = 1
-    
-    # # 保存适应度历史数据到JSON文件
-    # fitness_data = {
-    #     'max_fitness_history': max_fitness_history,
-    #     'avg_fitness_history': avg_fitness_history,
-    #     'run_id': run_id,
-    #     'timestamp': timestamp,
-    #     'parameters': {
-    #         'POP_SIZE': POP_SIZE,
-    #         'PC': PC,
-    #         'PM': PM,
-    #         'N_GENERATIONS': N_GENERATIONS,
-    #         'NODE_NUM': NODE_NUM,
-    #         'SLOT_NUM': SLOT_NUM
-    #     }
-    # }
-    
-    # data_filename = os.path.join(result_path, f"fitness_data_{timestamp}_run{run_id}.json")
-    # with open(data_filename, 'w') as f:
-    #     json.dump(fitness_data, f, indent=2)
-    
-    # print(f"适应度历史数据已保存至: {data_filename}")
-    
-    # # 然后绘制并保存收敛曲线
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(max_fitness_history, label='Max Fitness')
-    # plt.plot(avg_fitness_history, label='Average Fitness')
-    # plt.xlabel('Generation')
-    # plt.ylabel('Fitness')
-    # plt.title(f'Convergence (Run {run_id})')
-    # plt.legend()
-    # plt.grid(True)
-    
-    # plot_filename = os.path.join(result_path, f"fitness_convergence_{timestamp}_run{run_id}.png")
-    # plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
-    # print(f"收敛曲线已保存至: {plot_filename}")
-    # plt.show()
+
     
     return matrix, nowPopulation, max_fitness_history[-1]
 
@@ -601,13 +535,13 @@ if __name__ == "__main__":
     #         [1, 0, 0, 1, 0, 1, 0, 0, 0],
     #         [1, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
-    #         [0, 1, 1, 0, 0, 0, 0, 0, 1],  # 变化：添加了(7,8)边
-    #         [0, 0, 0, 0, 0, 0, 1, 1, 0]   # 变化：添加了(8,7)边
+    #         [0, 1, 1, 0, 0, 0, 0, 0, 1],  # 变化:添加了(7,8)边
+    #         [0, 0, 0, 0, 0, 0, 1, 1, 0]   # 变化:添加了(8,7)边
     #     ]    
 
     # neib4 = [
-    #         [0, 0, 1, 0, 1, 1, 0, 0, 0],  # 变化：删除了(0,1)边
-    #         [0, 0, 0, 0, 0, 0, 0, 1, 0],  # 变化：删除了(1,0)边
+    #         [0, 0, 1, 0, 1, 1, 0, 0, 0],  # 变化:删除了(0,1)边
+    #         [0, 0, 0, 0, 0, 0, 0, 1, 0],  # 变化:删除了(1,0)边
     #         [1, 0, 0, 0, 0, 0, 0, 1, 0],
     #         [0, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [1, 0, 0, 1, 0, 1, 0, 0, 0],
@@ -619,10 +553,10 @@ if __name__ == "__main__":
 
     # neib5 = [
     #         [0, 0, 1, 0, 1, 1, 0, 0, 0],
-    #         [0, 0, 0, 0, 1, 0, 0, 1, 0],  # 变化：添加了(1,4)边
+    #         [0, 0, 0, 0, 1, 0, 0, 1, 0],  # 变化:添加了(1,4)边
     #         [1, 0, 0, 0, 0, 0, 0, 1, 0],
     #         [0, 0, 0, 0, 1, 0, 1, 0, 0],
-    #         [1, 1, 0, 1, 0, 1, 0, 0, 0],  # 变化：添加了(4,1)边
+    #         [1, 1, 0, 1, 0, 1, 0, 0, 0],  # 变化:添加了(4,1)边
     #         [1, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
     #         [0, 1, 1, 0, 0, 0, 0, 0, 1],
@@ -632,16 +566,16 @@ if __name__ == "__main__":
     # neib6 = [
     #         [0, 0, 1, 0, 1, 1, 0, 0, 0],
     #         [0, 0, 0, 0, 1, 0, 0, 1, 0],
-    #         [1, 0, 0, 0, 0, 0, 0, 0, 0],  # 变化：删除了(2,7)边
+    #         [1, 0, 0, 0, 0, 0, 0, 0, 0],  # 变化:删除了(2,7)边
     #         [0, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [1, 1, 0, 1, 0, 1, 0, 0, 0],
     #         [1, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
-    #         [0, 1, 0, 0, 0, 0, 0, 0, 1],  # 变化：删除了(7,2)边
+    #         [0, 1, 0, 0, 0, 0, 0, 0, 1],  # 变化:删除了(7,2)边
     #         [0, 0, 0, 0, 0, 0, 1, 1, 0]
     #     ]
     # neib7 = [
-    #         [0, 0, 1, 0, 1, 1, 0, 0, 1],  # 变化：添加了(0,8)边
+    #         [0, 0, 1, 0, 1, 1, 0, 0, 1],  # 变化:添加了(0,8)边
     #         [0, 0, 0, 0, 1, 0, 0, 1, 0],
     #         [1, 0, 0, 0, 0, 0, 0, 0, 0],
     #         [0, 0, 0, 0, 1, 0, 1, 0, 0],
@@ -649,14 +583,14 @@ if __name__ == "__main__":
     #         [1, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
     #         [0, 1, 0, 0, 0, 0, 0, 0, 1],
-    #         [1, 0, 0, 0, 0, 0, 1, 1, 0]   # 变化：添加了(8,0)边
+    #         [1, 0, 0, 0, 0, 0, 1, 1, 0]   # 变化:添加了(8,0)边
     #     ]
     # neib8 = [
     #         [0, 0, 1, 0, 1, 1, 0, 0, 1],
     #         [0, 0, 0, 0, 1, 0, 0, 1, 0],
     #         [1, 0, 0, 0, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 0, 1, 0, 0],  # 变化：删除了(3,4)边
-    #         [1, 1, 0, 0, 0, 1, 0, 0, 0],  # 变化：删除了(4,3)边
+    #         [0, 0, 0, 0, 0, 0, 1, 0, 0],  # 变化:删除了(3,4)边
+    #         [1, 1, 0, 0, 0, 1, 0, 0, 0],  # 变化:删除了(4,3)边
     #         [1, 0, 0, 0, 1, 0, 1, 0, 0],
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
     #         [0, 1, 0, 0, 0, 0, 0, 0, 1],
@@ -668,9 +602,9 @@ if __name__ == "__main__":
     #         [1, 0, 0, 0, 0, 0, 0, 0, 0],
     #         [0, 0, 0, 0, 0, 0, 1, 0, 0],
     #         [1, 1, 0, 0, 0, 1, 0, 0, 0],
-    #         [1, 0, 0, 0, 1, 0, 1, 1, 0],  # 变化：添加了(5,7)边
+    #         [1, 0, 0, 0, 1, 0, 1, 1, 0],  # 变化:添加了(5,7)边
     #         [0, 0, 0, 1, 0, 1, 0, 0, 1],
-    #         [0, 1, 0, 0, 0, 1, 0, 0, 1],  # 变化：添加了(7,5)边
+    #         [0, 1, 0, 0, 0, 1, 0, 0, 1],  # 变化:添加了(7,5)边
     #         [1, 0, 0, 0, 0, 0, 1, 1, 0]
     #     ]
     

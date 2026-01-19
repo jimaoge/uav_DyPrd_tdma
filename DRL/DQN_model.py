@@ -174,7 +174,7 @@ class DQN(object):
 
         # 定期打印训练信息
         if self.learn_step_counter % 50 == 0:
-            print(f"DQN训练迭代 {self.learn_step_counter}，损失：{loss.item()}")
+            print(f"DQN训练次数: {self.learn_step_counter}，损失：{loss.item()}")
 
         # 定期更新目标网络（将策略网络的参数复制到目标网络）
         if self.learn_step_counter % TARGET_UPDATE == 0:

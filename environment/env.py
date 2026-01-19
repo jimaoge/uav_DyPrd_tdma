@@ -49,6 +49,7 @@ class SelfOrganizingNetworkEnv:
         self.slot_reward_ratio = config.DQN_PARAMS['slot_reward_ratio']
         self.DQN_k = config.DQN_PARAMS['DQN_k']
         self.scalers_list = []
+        self.print_count = 0  # 用于控制打印频率
 
     def load_scalers_list(self):
         """加载9个归一化器文件到列表中"""
@@ -138,7 +139,7 @@ class SelfOrganizingNetworkEnv:
                 print(f"文件 {file_path} 已被删除")
             except OSError as e:
                 print(f"删除文件 {file_path} 时出错: {e}")
-        print("所有 .npy 文件已被删除")
+        print("所有时隙分配文件已被删除")
         return self.get_current_state()     
     
     # 执行一个动作并返回新的状态、奖励和完成标志
@@ -306,8 +307,11 @@ class SelfOrganizingNetworkEnv:
             raise ValueError(f"Unexpected link dynamics shape: {link_dynamic.shape}, expected ({self.DQN_k-1}, 3)")
         
         avg_link_dynamic = np.mean(link_dynamic, axis=0)  # 形状为(3,)
-        print(f'历史平均链路动态度: 消失={avg_link_dynamic[0]:.2f}, 新增={avg_link_dynamic[1]:.2f}, 保持={avg_link_dynamic[2]:.2f}')
-
+        if self.print_count == 0:
+            print(f'历史平均链路动态度: 消失={avg_link_dynamic[0]:.2f}, 新增={avg_link_dynamic[1]:.2f}, 保持={avg_link_dynamic[2]:.2f}')
+            self.print_count = 1
+        else:
+            self.print_count = 0
         # 将链路动态度展平为一维数组
         link_dynamic_flat = link_dynamic.flatten()
         
