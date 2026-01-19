@@ -7,11 +7,14 @@ class UAVConfig:
     
     def __init__(self):
         # ---------- 环境参数 ----------
+        uav_nums = 9.0
+        slot_nums = 9.0
+        Channel_transmission__rate = 10000000.0   # TDMA信道传输速率10Mbps, 1s分为9个时隙,单个时隙传输数据量为10Mbps除以9
         self.ENV_PARAMS = {
-            'uav_nums': 9,         # UAV数量
+            'uav_nums': uav_nums,         # UAV数量
             'communication_range': 300, # 通信范围(米)
-            'slot_nums': 9,        # 时隙数量
-            'boardcast_cost': 3     # 每轮周期所需的更新时隙分配方案的开销时隙数
+            'slot_nums': slot_nums,        # 时隙数量
+            'boardcast_cost': 9 * (uav_nums * uav_nums * slot_nums) / Channel_transmission__rate,     # 每轮周期所需的更新时隙分配方案的时隙数
         }
         # ---------- 基础路径 ----------
         # 获取项目根目录（config.py所在目录的父目录）
@@ -45,7 +48,7 @@ class UAVConfig:
             'LR': 0.002,                # 学习率
             'DQN_k': DQN_k,             # DQN需要输入历史k - 1个链路动态性
             'max_time': 15000,          # DQN训练数据的最大处理时间范围
-            'max_steps_per_episode': 100,  # 每个episode包含几轮周期/几次DyPrd决策
+            'max_steps_per_episode': 50,  # 每个episode包含几轮周期/几次DyPrd决策
             'total_episode_in_train': 500,  # 一次训练包含多少个episode
             'DQN_train_save_interval': 10,  # 每多少个episode保存一次指标
             'slot_reward_ratio': 1.0,       # 计算奖励时，时隙吞吐量的占比
@@ -85,9 +88,9 @@ class UAVConfig:
             'population_size' : 100,  # 种群的个体数量
             'probability_of_cross' : 0.6,  # 交叉概率
             'probability_of_mutate' : 0.05,  # 变异概率
-            'number_of_generation' : 300,  # 主算法循环次数
-            'number_of_node' : 9,
-            'number_of_slot' : 9
+            'number_of_generation' : 200,  # 主算法循环次数
+            'number_of_node' : uav_nums,
+            'number_of_slot' : slot_nums
         }
         
 

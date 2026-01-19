@@ -480,7 +480,7 @@ class SelfOrganizingNetworkEnv:
         self.coll = sum(col_list)
         
         N = self.node_nums  # 节点的数量
-        C = 1  # 每个链路在一个时隙内可以传输的数据量,1代表吞吐量=时隙数
+        C = 1  # 每个链路在一个时隙内可以传输的数据量,处理为1，数值上为10Mbps / 9
         DyPrd_len = len(slot_matrix)  # 获取时隙分配矩阵的数量
 
         # 初始化总时延和总吞吐量
