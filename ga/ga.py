@@ -102,7 +102,7 @@ def one_two_neighbors(one_hop_neighbors):
         two_hop_neighbors[i][i] = 0  # 对角线置0，节点自己不是自己的邻居
     return two_hop_neighbors
 
-# 表示遗传算法中的一个个体（时隙分配方案），每个个体有一个二进制序列（长度81=9节点*9时隙），包含适应度、选择概率等属性
+# 表示遗传算法中的一个个体（时隙分配方案），每个个体有一个二进制序列,包含9*(时隙i的分配情况,长度为9)，包含适应度、选择概率等属性
 class Individual:
     def __init__(self, m_Sequence):
         self.Sequence = m_Sequence
@@ -165,7 +165,7 @@ def cal_fitness(neib_list, weight_list=None):
         weight_list = [1.0 / len(neib_list)] * len(neib_list)
     # NODE_NUM = SLOT_NUM = 9, N_2 = NODE_NUM * SLOT_NUM
     PUNISH_CONFLICT = 2  # 冲突惩罚值
-    PUNISH_ZERO_NODE = 3     # 全零节点惩罚值
+    PUNISH_ZERO_NODE = 9     # 全零节点惩罚值
     min_fitness = 0 # 记录种群的最小适应度,用于后续cal_P_fitness函数
     maxFitTemp = float('-inf')  # 记录种群的最大适应度
     maxFitIndex = 0
@@ -391,9 +391,11 @@ def genetic_algorithm(neib_list, weight_list, k=20, P=None, run_id=0, save_resul
         select()
         crossover()
         mutation()
-        T -= 1     
+        T -= 1    
+        # if T % 10 == 0:
+        #     print(f"遗传算法训练迭代剩余{T}次, 本次迭代最大适应度：{maxFitTemp}")    
 
-    # 输出算法运行的最终结果,因为最优个体一定会被保存到下一个种群,所以global_max_fit应该等于maxFitTemp
+    # 输出算法运行的最终结果,因为最优个体被保存到下一个种群后可能经过交叉变异,所以global_max_fit可能不等于maxFitTemp
     print(f"全局最大适应度:{global_max_fit}, 恢复偏移后为:{global_max_fit + 82}")
     # assert global_max_fit == maxFitTemp, f"global_max_fit={global_max_fit}, maxFitTemp={maxFitTemp}"
     

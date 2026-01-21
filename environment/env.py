@@ -183,6 +183,14 @@ class SelfOrganizingNetworkEnv:
         
         # 通过遗传算法生成时隙分配矩阵
         slot_allocation_matrix, population, max_fitness = genetic_algorithm(predicted_topology, weight_list = [])
+        # if self.DyPrd == 2:
+        #     print('slot_allocation_matrix:')
+        #     print(f'{slot_allocation_matrix}')
+        #     print('rel_topology:')
+        #     print(f'{rel_topology}')
+        #     print('predicted_topology:')
+        #     print(f'{predicted_topology}')
+        
         # 保存分配方案
         # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
 
@@ -533,43 +541,52 @@ class SelfOrganizingNetworkEnv:
         # 更新时隙分配方案占用的吞吐量
         boardcast_cost = config.ENV_PARAMS['boardcast_cost']
         # 计算奖励
-        reward = (self.slot_reward_ratio * (self.T_sum - boardcast_cost) - 0.3 * sum(self.diff)  - self.coll) / self.DyPrd
+        reward = (self.slot_reward_ratio * (self.T_sum - boardcast_cost) - 0.3 * sum(self.diff)  - 0.3 * self.coll) / self.DyPrd
+        print(f"拓扑推演误差:{self.diff},冲突时隙数:{col_list}")
         print(f"reward:{reward}, 平均吞吐量:{(self.T_sum - boardcast_cost) / self.DyPrd},拓扑推演的平均误差:{sum(self.diff) / self.DyPrd},平均冲突时隙数:{self.coll / self.DyPrd}")
         return reward
     
     def cal_collision(self, rel_topology_list, slot_matrix):
-        """
-        验证时隙分配矩阵在真实的拓扑中是否有冲突,对每个时间点独立处理
-        输入: rel_topology_list - 真实拓扑矩阵列表,长度为DyPrd
-            slot_matrix - 基于预测拓扑生成的时隙分配矩阵
-        输出: slot_matrix_list - 每个时间点处理后的时隙分配矩阵列表
-            col_list - 每个时间点冲突时隙数的列表
-        """
-        slot_matrix_list = []
-        col_list = []
-        
-        for rel_topy in rel_topology_list:
-            # 创建时隙分配矩阵的副本,避免修改原始矩阵
-            current_slot_matrix = slot_matrix.copy()
-            col = 0
+            """
+            验证时隙分配矩阵在真实的拓扑中是否有冲突,对每个时间点独立处理
+            输入: rel_topology_list - 真实拓扑矩阵列表,长度为DyPrd
+                slot_matrix - 基于预测拓扑生成的时隙分配矩阵(时隙×节点格式)
+            输出: slot_matrix_list - 每个时间点处理后的时隙分配矩阵列表
+                col_list - 每个时间点冲突时隙数的列表
+            """
+            slot_matrix_list = []
+            col_list = []
             
-            # 计算二阶邻居
-            neib_2 = one_two_neighbors(rel_topy)
+            for rel_topy in rel_topology_list:
+                # 创建时隙分配矩阵的副本(时隙×节点格式)
+                current_slot_matrix = slot_matrix.copy()
+                col = 0
+                
+                # 计算二阶邻居
+                neib_2 = one_two_neighbors(rel_topy)
+                
+                # 遍历所有时隙
+                for s in range(self.slot_nums):
+                    # 遍历所有节点对
+                    for ii in range(self.node_nums):
+                        # 如果当前节点在该时隙无分配，跳过
+                        if current_slot_matrix[s][ii] == 0:
+                            continue
+                            
+                        for jj in range(ii + 1, self.node_nums):
+                            # 检查节点ii和jj是否是一阶或二阶邻居
+                            if rel_topy[ii][jj] == 1 or neib_2[ii][jj] == 1:
+                                # 检查两个节点在同一时隙上是否都有分配
+                                if current_slot_matrix[s][ii] + current_slot_matrix[s][jj] > 1:
+                                    # 如果两个节点在同一个时隙上都有分配,则存在冲突
+                                    col += 2
+                                    current_slot_matrix[s][ii] = 0
+                                    current_slot_matrix[s][jj] = 0
+                
+                slot_matrix_list.append(current_slot_matrix)
+                col_list.append(col)
             
-            for ii in range(self.node_nums):
-                for jj in range(ii + 1, self.node_nums):
-                    if rel_topy[ii][jj] == 1 or neib_2[ii][jj] == 1:
-                        for s in range(self.slot_nums):
-                            if (current_slot_matrix[ii][s] + current_slot_matrix[jj][s] > 1):
-                                # 如果两个节点在同一个时隙上都有分配,则存在冲突
-                                col += 2
-                                current_slot_matrix[ii][s] = 0
-                                current_slot_matrix[jj][s] = 0
-            
-            slot_matrix_list.append(current_slot_matrix)
-            col_list.append(col)
-        
-        return slot_matrix_list, col_list
+            return slot_matrix_list, col_list
     
     def save_slot(self, time, slot_matrix, path):
         """
