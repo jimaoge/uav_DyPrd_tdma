@@ -4,6 +4,7 @@ import glob
 import os
 import numpy as np
 import pickle
+import copy
 import joblib
 import pandas as pd
 import torch
@@ -105,16 +106,16 @@ class SelfOrganizingNetworkEnv:
         self.diff = []
         self.coll = 0
         self.T_sum = 0
-        # 删除保存的时隙分配方案
-        folder_path = config.DATA_PATHS['saved_slots_matrix_path']
-        npy_files = glob.glob(os.path.join(folder_path, '*.npy'))
-        for file_path in npy_files:
-            try:
-                os.remove(file_path)
-                print(f"文件 {file_path} 已被删除")
-            except OSError as e:
-                print(f"删除文件 {file_path} 时出错: {e}")
-        print("所有 .npy 文件已被删除")
+        # # 删除保存的时隙分配方案
+        # folder_path = config.DATA_PATHS['saved_slots_matrix_path']
+        # npy_files = glob.glob(os.path.join(folder_path, '*.npy'))
+        # for file_path in npy_files:
+        #     try:
+        #         os.remove(file_path)
+        #         print(f"文件 {file_path} 已被删除")
+        #     except OSError as e:
+        #         print(f"删除文件 {file_path} 时出错: {e}")
+        # print("所有时隙分配文件已被删除")
         return self.get_current_state()
 
     def reset_random_time(self):
@@ -130,16 +131,16 @@ class SelfOrganizingNetworkEnv:
         self.diff = []
         self.coll = 0
         self.T_sum = 0
-        # 删除保存的时隙分配方案
-        folder_path = config.DATA_PATHS['saved_slots_matrix_path']
-        npy_files = glob.glob(os.path.join(folder_path, '*.npy'))
-        for file_path in npy_files:
-            try:
-                os.remove(file_path)
-                print(f"文件 {file_path} 已被删除")
-            except OSError as e:
-                print(f"删除文件 {file_path} 时出错: {e}")
-        print("所有时隙分配文件已被删除")
+        # # 删除保存的时隙分配方案
+        # folder_path = config.DATA_PATHS['saved_slots_matrix_path']
+        # npy_files = glob.glob(os.path.join(folder_path, '*.npy'))
+        # for file_path in npy_files:
+        #     try:
+        #         os.remove(file_path)
+        #         print(f"文件 {file_path} 已被删除")
+        #     except OSError as e:
+        #         print(f"删除文件 {file_path} 时出错: {e}")
+        # print("所有时隙分配文件已被删除")
         return self.get_current_state()     
     
     # 执行一个动作并返回新的状态、奖励和完成标志
@@ -186,7 +187,115 @@ class SelfOrganizingNetworkEnv:
         # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
 
         # 计算奖励
-        reward = self.calculate_reward(slot_allocation_matrix)
+        reward = self.calculate_reward(slot_allocation_matrix, rel_topology)
+
+        # 更新当前时间
+        self.cur_prd_start_time = self.next_prd_start_time
+        done = self.cur_prd_start_time >= self.max_time
+
+        return self.get_current_state(), reward, done
+    
+    # 执行一个动作,用于拓扑预测,weight_list = [1,0,0...]
+    def step_TPYuCe(self, action):
+        self.pre_DyPrd = self.DyPrd  # 保存上一轮的DyPrd
+        
+        if action == 0:
+            self.DyPrd = 2
+        if action == 1:
+            self.DyPrd = 3
+        if action == 2:
+            self.DyPrd = 4
+        if action == 3:
+            self.DyPrd = 5
+        if action == 4:
+            self.DyPrd = 6
+        if action == 5:
+            self.DyPrd = 7
+        if action == 6:
+            self.DyPrd = 8
+        if action == 7:
+            self.DyPrd = 9
+        if action == 8:
+            self.DyPrd = 10
+        # if action == 9:
+        #     self.DyPrd = 11
+
+        print(f"DyPrd:{self.DyPrd}")
+        self.next_prd_start_time = min(self.cur_prd_start_time + self.DyPrd, self.max_time)
+
+        # 预测拓扑并计算预测差异
+        # predicted_topology为一个长度为DyPrd的列表,其中每个元素是该时间点的 (9, 9)的预测邻接矩阵
+        predicted_topology = self.predict_topology(self.DyPrd)
+        # 将所有预测邻接矩阵换为第一个矩阵，模拟拓扑预测的情况
+        if predicted_topology:  # 确保列表不为空
+            first_element = copy.deepcopy(predicted_topology[0])
+            predicted_topology = [first_element.copy() for _ in range(len(predicted_topology))]
+        # rel_topology为一个长度为DyPrd的列表,其中每个元素是该时间点的 (9, 9)的实际邻接矩阵
+        rel_topology = self.get_cur_link_matrix_list()
+        
+        # self.diff为包含所有时间点差异数的数组
+        self.diff = self.get_diff(predicted_topology, rel_topology)
+        # print(f"diff:{self.diff}")
+        
+        # 通过遗传算法生成时隙分配矩阵
+        slot_allocation_matrix, population, max_fitness = genetic_algorithm(predicted_topology, weight_list = [])
+        # 保存分配方案
+        # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
+
+        # 计算奖励
+        reward = self.calculate_reward(slot_allocation_matrix, rel_topology)
+
+        # 更新当前时间
+        self.cur_prd_start_time = self.next_prd_start_time
+        done = self.cur_prd_start_time >= self.max_time
+
+        return self.get_current_state(), reward, done
+
+    # 将遗传算法替换为了DRAND的随机时隙算法
+    def step_DRAND(self, action):
+        self.pre_DyPrd = self.DyPrd  # 保存上一轮的DyPrd
+        
+        if action == 0:
+            self.DyPrd = 2
+        if action == 1:
+            self.DyPrd = 3
+        if action == 2:
+            self.DyPrd = 4
+        if action == 3:
+            self.DyPrd = 5
+        if action == 4:
+            self.DyPrd = 6
+        if action == 5:
+            self.DyPrd = 7
+        if action == 6:
+            self.DyPrd = 8
+        if action == 7:
+            self.DyPrd = 9
+        if action == 8:
+            self.DyPrd = 10
+        # if action == 9:
+        #     self.DyPrd = 11
+
+        print(f"DyPrd:{self.DyPrd}")
+        self.next_prd_start_time = min(self.cur_prd_start_time + self.DyPrd, self.max_time)
+
+        # 预测拓扑并计算预测差异
+        # predicted_topology为一个长度为DyPrd的列表,其中每个元素是该时间点的 (9, 9)的预测邻接矩阵
+        predicted_topology = self.predict_topology(self.DyPrd)
+        # rel_topology为一个长度为DyPrd的列表,其中每个元素是该时间点的 (9, 9)的实际邻接矩阵
+        rel_topology = self.get_cur_link_matrix_list()
+        
+        # self.diff为包含所有时间点差异数的数组
+        self.diff = self.get_diff(predicted_topology, rel_topology)
+        # print(f"diff:{self.diff}")
+        
+        # 通过遗传算法生成时隙分配矩阵
+        slot_allocation_matrix, population, max_fitness = genetic_algorithm(predicted_topology, weight_list = [])
+        # 保存分配方案
+        # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
+
+        # 计算奖励
+        reward = self.calculate_reward(slot_allocation_matrix, rel_topology)
 
         # 更新当前时间
         self.cur_prd_start_time = self.next_prd_start_time
@@ -320,83 +429,6 @@ class SelfOrganizingNetworkEnv:
         
         return current_state_flat
 
-    # 获取指定时间窗口内网络拓扑的动态变化信息,并将其扁平化为一维特征向量返回
-    def get_p_t(self, current_time, Length):
-        # 获取历史数据,self.data包含节点的历史数据
-        history_data = self.data[(self.data['Time'] >= current_time - Length) & (self.data['Time'] <= current_time)]
-
-        # 提取节点坐标信息
-        node_positions = self.data[(self.data['Time'] == current_time)]
-        # 初始化拓扑变化信息列表
-        topology_changes_flat = []
-
-        # 遍历节点数据,计算拓扑变化信息
-        for index, row in node_positions.iterrows():
-            node_id = row['Node']
-            x = row['X']
-            y = row['Y']
-            z = row['Z']
-            # 获取当前节点的历史位置信息
-            node_history = history_data[history_data['Node'] == node_id][['Time', 'X', 'Y', 'Z']].values
-
-            # 初始化新增和减少的邻居节点列表
-            new_neighbors = np.zeros((self.node_nums), dtype=int)
-            lost_neighbors = np.zeros((self.node_nums), dtype=int)
-
-            # 获取当前时间节点的邻居节点列表
-            current_neighbors = self.get_neighbors(node_id, node_positions)
-
-            # 获取Time-Length时间前节点的邻居节点列表
-            prev_time = current_time - Length
-            prev_positions = self.data[(self.data['Time'] == prev_time)]
-            prev_neighbors = self.get_neighbors(node_id, prev_positions)
-
-            # 计算新增和减少的邻居节点
-            for neighbor in current_neighbors:
-                if neighbor not in prev_neighbors:
-                    new_neighbors[int(neighbor)] = 1
-
-            for neighbor in prev_neighbors:
-                if neighbor not in current_neighbors:
-                    lost_neighbors[int(neighbor)] = 1
-
-            # 计算位置向量的变化
-            position_changes = []
-            for i in range(1, len(node_history)):
-                position_change = node_history[i][1:] - node_history[i - 1][1:]
-                position_changes += position_change.tolist()
-
-            # 将节点拓扑特征 = [新增邻居向量] + [丢失邻居向量] + [位置变化序列]组合成一维列表
-            node_topology_changes = new_neighbors.tolist() + lost_neighbors.tolist() + position_changes
-
-            # 添加节点的拓扑变化信息到扁平化的总列表
-            topology_changes_flat.extend(node_topology_changes)
-
-        return topology_changes_flat
-
-    def get_neighbors(self, node_id, current_positions):
-        # 初始化邻居节点列表
-        neighbors = []
-
-        node_info = current_positions.loc[current_positions['Node'] == node_id]
-        x1 = node_info['X'].values[0]
-        y1 = node_info['Y'].values[0]
-        z1 = node_info['Z'].values[0]
-        # 遍历所有节点
-        for index, row in current_positions.iterrows():
-            other_node_id = row['Node']
-            x2 = row['X']
-            y2 = row['Y']
-            z2 = row['Z']
-            if other_node_id != node_id:
-                # 计算节点之间的距离
-                distance = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
-                # 如果距离在一定范围内,则将该节点视为邻居
-                if distance <= config.ENV_PARAMS['communication_range']:
-                    neighbors.append(other_node_id)
-
-        return neighbors
-
     def predict_topology(self, DyPrd):
         if not self.lstm_models:
             self.load_lstm_model()
@@ -463,15 +495,13 @@ class SelfOrganizingNetworkEnv:
         # 返回一个长度为 DyPrd的列表,其中每个元素是该预测时间点的 (9, 9)的邻接矩阵
         return topology_matrices
 
-    def calculate_reward(self, slot_allocation_matrix):
+    def calculate_reward(self, slot_allocation_matrix, rel_topology):
         """
         先计算真实的拓扑和去除时隙冲突之后的时隙分配矩阵,然后根据这个时隙分配矩阵和真实的拓扑计算时延和吞吐量,最后计算奖励。
         :param slot_allocation_matrix:
         :param future_time:
         :return:
         """
-        # 读取真实的拓扑
-        rel_topology = self.get_cur_link_matrix_list()
         # slot_matrix为去除时隙冲突之后的时隙分配矩阵数组,包含DyPrd个无冲突矩阵
         # col_list为包含了DyPrd个冲突时隙数的数组
         slot_matrix, col_list = self.cal_collision(rel_topology, slot_allocation_matrix)
