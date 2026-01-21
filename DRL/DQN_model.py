@@ -221,7 +221,7 @@ class DQN(object):
         model_path = model_dir / filename
         
         # 加载模型
-        checkpoint = torch.load(model_path)
+        checkpoint = torch.load(model_path, weights_only=True)
         self.policy_net.load_state_dict(checkpoint['policy_net'])
         self.target_net.load_state_dict(checkpoint['target_net'])
         

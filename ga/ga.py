@@ -166,7 +166,9 @@ def cal_fitness(neib_list, weight_list=None):
     # NODE_NUM = SLOT_NUM = 9, N_2 = NODE_NUM * SLOT_NUM
     PUNISH_CONFLICT = 2  # 冲突惩罚值
     PUNISH_ZERO_NODE = 3     # 全零节点惩罚值
-
+    min_fitness = 0 # 记录种群的最小适应度,用于后续cal_P_fitness函数
+    maxFitTemp = float('-inf')  # 记录种群的最大适应度
+    maxFitIndex = 0
     for i in range(POP_SIZE):
         seq = nowPopulation[i].Get_Sequence()
         weighted_fitness = 0.0
@@ -207,13 +209,16 @@ def cal_fitness(neib_list, weight_list=None):
             # 加权累加当前拓扑的适应度
             weighted_fitness += weight * topo_fitness
         nowPopulation[i].set_Fitness(weighted_fitness)
+        if maxFitTemp < weighted_fitness:
+            maxFitTemp = weighted_fitness
+            maxFitIndex = i
+        if min_fitness > weighted_fitness:
+            min_fitness = weighted_fitness
+    return maxFitTemp, maxFitIndex, min_fitness
 
 # 根据个体适应度决定选择概率
-def cal_P_fitness():
+def cal_P_fitness(min_fitness):
     global nowPopulation
-    # 找到最小适应度（最负的值）
-    min_fitness = min(nowPopulation[i].Get_Fitness() for i in range(POP_SIZE))
-    
     # 将所有适应度平移为正数
     offset = -min_fitness + 1  # 确保最小值为1
     adjusted_fitness_list = []
@@ -348,7 +353,6 @@ def genetic_algorithm(neib_list, weight_list, k=20, P=None, run_id=0, save_resul
         initialize_random()
         # save_population(nowPopulation)
     
-    maxFitIndex = 0
     T = N_GENERATIONS
     # 添加记录适应度历史的列表
     max_fitness_history = []  # 记录每次迭代最优个体的适应度
@@ -359,51 +363,46 @@ def genetic_algorithm(neib_list, weight_list, k=20, P=None, run_id=0, save_resul
     global_max_fit_index = -1
 
     while T: 
-        # 1. 计算当前种群的适应度
+        maxFitTemp = float('-inf')  # 每一步的最大适应度
+        maxFitIndex = 0  # 最大适应度个体的序号
+        # 计算当前种群的适应度
         if weight_list is not None and len(weight_list) > 0:  # weight_list不为None且非空
-            cal_fitness(neib_list, weight_list)
+            maxFitTemp, maxFitIndex, minFitTemp = cal_fitness(neib_list, weight_list)
         else:  # weight_list为None或空列表
-            cal_fitness(neib_list)
-        
-        # 2. 更新全局最大适应度
-        maxFitTemp = float('-inf')
-        for s in range(POP_SIZE):
-            if maxFitTemp < nowPopulation[s].Get_Fitness():
-                maxFitTemp = nowPopulation[s].Get_Fitness()
-                maxFitIndex = s
-        
+            maxFitTemp, maxFitIndex, minFitTemp = cal_fitness(neib_list)
+
+        # 更新全局最大适应度,记录最优个体
         if maxFitTemp > global_max_fit:
             global_max_fit = maxFitTemp
-            global_max_fit_index = maxFitIndex  # 新增这一行，记录全局最优个体的索引
-        
-        # 3. 计算并记录当前种群的平均适应度
+            global_max_fit_index = maxFitIndex  # 记录全局最优个体的索引
+            # assert len(nowPopulation[global_max_fit_index].Get_Sequence()) == N_2, "列表长度不正确"
+            sequence = nowPopulation[global_max_fit_index].Get_Sequence()  # 返回全局最优索引
+            matrix = np.array(sequence).reshape(SLOT_NUM, NODE_NUM)
+               
+        # 如果开启记录功能，则计算并记录当前种群的平均适应度
         if save_results:
             avg_fitness = sum(indiv.Get_Fitness() for indiv in nowPopulation) / POP_SIZE
             avg_fitness_history.append(avg_fitness)
-        max_fitness_history.append(global_max_fit)
+            max_fitness_history.append(global_max_fit)
         
-        # 4. 执行遗传操作（此时记录的是操作前的适应度）
-        cal_P_fitness()
+        # 执行遗传操作（此时记录的是操作前的适应度）
+        cal_P_fitness(minFitTemp)
         cal_Sum_fitness()
         select()
         crossover()
         mutation()
         T -= 1     
 
-    # 输出算法运行的最终结果
+    # 输出算法运行的最终结果,因为最优个体一定会被保存到下一个种群,所以global_max_fit应该等于maxFitTemp
     print(f"全局最大适应度:{global_max_fit}, 恢复偏移后为:{global_max_fit + 82}")
-
-    # 转换为矩阵
-    assert len(nowPopulation[global_max_fit_index].Get_Sequence()) == N_2, "列表长度不正确"
-    sequence = nowPopulation[global_max_fit_index].Get_Sequence()  # 返回全局最优索引
-    matrix = np.array(sequence).reshape(SLOT_NUM, NODE_NUM)
+    # assert global_max_fit == maxFitTemp, f"global_max_fit={global_max_fit}, maxFitTemp={maxFitTemp}"
     
     # 保存结果
     if save_results:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         save_fitness_history(max_fitness_history, avg_fitness_history, run_id, timestamp)
     
-    return matrix, nowPopulation, max_fitness_history[-1]
+    return matrix, nowPopulation, global_max_fit
 
 # 保存适应度历史数据的函数
 def save_fitness_history(max_fitness_history, avg_fitness_history, run_id=0, timestamp=None):
