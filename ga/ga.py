@@ -3,6 +3,8 @@ import random
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+import json
+import time
 import sys
 from pathlib import Path
 
@@ -176,8 +178,9 @@ def cal_fitness(neib_list, weight_list=None):
         for neib_mat, weight in zip(neib_list, weight_list):
             # 这里减去(N_2 + 1)是保证所有适应度均为负数,因为后续函数存在“分母为适应度求和”的情况,避免除零错误
             topo_fitness = active_count - N_2 - 1
-
-            # 邻居节点冲突惩罚
+            # 获得两跳邻接矩阵
+            neib_2 = one_two_neighbors(neib_mat)
+            # 邻居节点冲突惩罚（包含一阶和二阶）
             for slot in range(SLOT_NUM):
                 slot_base_idx = slot * NODE_NUM
                 for ii in range(NODE_NUM):
@@ -185,7 +188,9 @@ def cal_fitness(neib_list, weight_list=None):
                     if val_ii != 1:
                         continue
                     for jj in range(ii + 1, NODE_NUM):
-                        if neib_mat[ii][jj] == 1 and seq[slot_base_idx + jj] == 1:
+                        # 同时检查一阶和二阶邻居
+                        if (neib_mat[ii][jj] == 1 or neib_2[ii][jj] == 1) and \
+                           seq[slot_base_idx + jj] == 1:
                             topo_fitness -= PUNISH_CONFLICT
 
             # 全零节点惩罚
@@ -329,7 +334,7 @@ def initialize_with_top_individuals(top_individuals=[]):
         nowPopulation.append(indivi)
 
 # 主遗传算法循环，执行N_GENERATIONS代进化，记录每代最佳和平均适应度，保存结果和收敛曲线
-def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
+def genetic_algorithm(neib_list, weight_list, k=20, P=None, run_id=0, save_results=False):
     global nowPopulation, midPopulation, nextPopulation
     # 判断是否提供了种群P，若没有则初始化种群
     nowPopulation = []  # 确保种群从空开始
@@ -372,8 +377,9 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
             global_max_fit_index = maxFitIndex  # 新增这一行，记录全局最优个体的索引
         
         # 3. 计算并记录当前种群的平均适应度
-        avg_fitness = sum(indiv.Get_Fitness() for indiv in nowPopulation) / POP_SIZE
-        avg_fitness_history.append(avg_fitness)
+        if save_results:
+            avg_fitness = sum(indiv.Get_Fitness() for indiv in nowPopulation) / POP_SIZE
+            avg_fitness_history.append(avg_fitness)
         max_fitness_history.append(global_max_fit)
         
         # 4. 执行遗传操作（此时记录的是操作前的适应度）
@@ -382,24 +388,70 @@ def genetic_algorithm(neib_list, weight_list, k = 20, P = None, run_id = 0):
         select()
         crossover()
         mutation()
-        # 定期打印训练信息
-        if T % 10 == 0:
-            print(f"遗传算法训练迭代剩余{T}次, 目前最大适应度:{global_max_fit}, 恢复偏移后为:{global_max_fit + 82}")  
         T -= 1     
 
-
-    # 输出算法运行的最终结果和运行时间
-    # sequence_str = ', '.join(map(str, nowPopulation[global_max_fit_index].Get_Sequence()))
-    # print(f"最佳解:{sequence_str},全局最大适应度:{global_max_fit}")
-
+    # 输出算法运行的最终结果
+    print(f"全局最大适应度:{global_max_fit}, 恢复偏移后为:{global_max_fit + 82}")
 
     # 转换为矩阵
-    assert len(nowPopulation[maxFitIndex].Get_Sequence()) == N_2, "列表长度不正确"
-    sequence = nowPopulation[global_max_fit_index].Get_Sequence() # 返回全局最优索引
+    assert len(nowPopulation[global_max_fit_index].Get_Sequence()) == N_2, "列表长度不正确"
+    sequence = nowPopulation[global_max_fit_index].Get_Sequence()  # 返回全局最优索引
     matrix = np.array(sequence).reshape(SLOT_NUM, NODE_NUM)
-
+    
+    # 保存结果
+    if save_results:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        save_fitness_history(max_fitness_history, avg_fitness_history, run_id, timestamp)
     
     return matrix, nowPopulation, max_fitness_history[-1]
+
+# 保存适应度历史数据的函数
+def save_fitness_history(max_fitness_history, avg_fitness_history, run_id=0, timestamp=None):
+    """
+    保存适应度历史数据和绘制收敛曲线
+    
+    参数:
+    max_fitness_history: 每代最大适应度历史列表
+    avg_fitness_history: 每代平均适应度历史列表
+    run_id: 运行ID
+    timestamp: 时间戳，如果为None则使用当前时间
+    """
+    if timestamp is None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+    
+    data_dir = config.DATA_PATHS['ga_fitness_history_path']   # "results" / "ga_history"
+    os.makedirs(data_dir, exist_ok=True)  # 创建保存数据的目录
+    final_data_path = os.path.join(data_dir, "ga_fitness_history.json")
+    # 保存适应度历史数据到JSON文件
+    fitness_data = {
+        'max_fitness_history': max_fitness_history,
+        'avg_fitness_history': avg_fitness_history,
+        'run_id': run_id,
+        'timestamp': timestamp,
+    }
+    data_filename = os.path.join(data_dir, f"fitness_data_{timestamp}_run{run_id}.json")
+    with open(data_filename, 'w') as f:
+        json.dump(fitness_data, f, indent=2)
+    
+    print(f"适应度历史数据已保存至: {data_filename}")
+    
+    # 绘制并保存收敛曲线
+    plt.figure(figsize=(10, 6))
+    plt.plot(max_fitness_history, label='Max Fitness', linewidth=2)
+    plt.plot(avg_fitness_history, label='Average Fitness', linewidth=2)
+    plt.xlabel('Generation', fontsize=12)
+    plt.ylabel('Fitness', fontsize=12)
+    plt.title(f'Fitness Convergence (Run {run_id})', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True, alpha=0.3)
+    
+    plot_filename = os.path.join(data_dir, f"fitness_convergence_{timestamp}_run{run_id}.png")
+    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    print(f"收敛曲线已保存至: {plot_filename}")
+    plt.close()  # 关闭图形，避免内存泄漏
+    # plt.show()  # 注释掉show，避免阻塞
+    
+    return data_filename, plot_filename
 
 def save_population(population, filename = config.DATA_PATHS['saved_population_file_name']):
     # 获取保存路径
@@ -632,7 +684,7 @@ if __name__ == "__main__":
         if len(sys.argv) > 1:
             filename = sys.argv[1]
         else:
-            filename = "neighbor_matrices/neighbor_matrices.json"
+            filename = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/ga/neighbor_matrices/neighbor_matrices.json"
         
         neib_list, weight_list, topology_info = load_topology_from_json(filename)
         
@@ -670,9 +722,9 @@ if __name__ == "__main__":
     #每次保留适应度最高的u个个体
     u = 20
     # 随机初始化种群，保存迭代后的种群
-    m, P, TEMP = genetic_algorithm(neib_list, weight_list, u)
-    save_population(P)
-    save_result_to_json(m, topology_info)
+    m, P, TEMP = genetic_algorithm(neib_list, weight_list, u, save_results=True)
+    # save_population(P)
+
     # 加载固定的种群
     # P = load_population()
     # genetic_algorithm(neib_list, weight_list,u, P)
