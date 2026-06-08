@@ -685,7 +685,7 @@ if __name__ == "__main__":
         if len(sys.argv) > 1:
             filename = sys.argv[1]
         else:
-            filename = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/ga/neighbor_matrices/neighbor_matrices.json"
+            filename = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/ga/neighbor_matrices/neighbor_matrices_5.json"
         
         neib_list, weight_list, topology_info = load_topology_from_json(filename)
         

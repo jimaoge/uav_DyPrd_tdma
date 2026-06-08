@@ -10,7 +10,6 @@ project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
 from environment.env import SelfOrganizingNetworkEnv
-from DRL.DQN_model import DQN
 from config.config import config
 from utils.utils import NumpyEncoder
 
@@ -38,7 +37,7 @@ def run():
             print()
             print(f"-----当前step_count:{step_count}/{total_step_count},episode:{ep}/{total_episodes}-----")
             action = 4  # 固定为6
-            env.step_TPYuCe(action)
+            state_next, reward, done = env.step_TPYuCe(action)
 
             # 记录当前step的数据
             step_data = {
@@ -56,7 +55,7 @@ def run():
         all_episodes_data.append(episode_data)      
         
         # 只在定期保存检查点时保存数据
-        save_interval = 30
+        save_interval = 1
         if (ep + 1) % save_interval == 0:
             
             # # 只保存当前检查点周期的数据（最后save_interval个episode）
@@ -69,7 +68,7 @@ def run():
             #     json.dump(recent_episodes, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             
             # 保存最终完整数据
-            final_data_path = os.path.join(data_dir, "training_data_history.json")
+            final_data_path = os.path.join(data_dir, "training_data_history_fixPrd_TPYC.json")
             with open(final_data_path, 'w', encoding='utf-8') as f:
                 json.dump(all_episodes_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)    
 

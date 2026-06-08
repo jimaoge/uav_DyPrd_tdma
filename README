@@ -1,2 +1,4 @@
 # 运行指令
 python3 -u ./scripts/train_env.py > ./results/DQN_training/output.txt
+python3 -u ./scripts/train_env_fix_prd_DRAND.py > ./results/DQN_training/output.txt
+python3 -u ./scripts/train_env_fix_prd_TPYuCe.py > ./results/DQN_training/output.txt

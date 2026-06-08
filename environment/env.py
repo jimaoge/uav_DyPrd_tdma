@@ -1,5 +1,3 @@
-# 这个环境是计算TDMA时隙分配算法的方法是遗传算法
-
 import glob
 import os
 import numpy as np
@@ -297,8 +295,8 @@ class SelfOrganizingNetworkEnv:
         self.diff = self.get_diff(predicted_topology, rel_topology)
         # print(f"diff:{self.diff}")
         
-        # 通过遗传算法生成时隙分配矩阵
-        slot_allocation_matrix, population, max_fitness = genetic_algorithm(predicted_topology, weight_list = [])
+        # 通过DRAND随机生成时隙分配矩阵
+        slot_allocation_matrix = np.random.randint(0, 2, (9, 9))
         # 保存分配方案
         # self.save_slot(self.current_time + self.DyPrd, slot_allocation_matrix, config.DATA_PATHS['saved_slots_matrix_path'])
 

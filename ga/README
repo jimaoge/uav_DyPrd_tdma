@@ -9,3 +9,5 @@
 【mutation()】→ nowPopulation.clear() → 写入变异子代 → nextPopulation.clear()
     ↓
 【迭代结束】→ nowPopulation(下一代种群，纯净无残留)
+
+ga_compare.py是不以时隙为单位进行交叉

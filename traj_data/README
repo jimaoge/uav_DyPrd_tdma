@@ -14,15 +14,31 @@ csv_round_int.py
 preprocess.py
     读取origin_data/里包含多个节点的CSV文件,支持时间范围,如只保留时间在0~max_time之间的数据。
     模型训练前,将数据集划分为训练集60%,验证集20%,测试集20%
-    在processed_data目录下生成pkl文件,npz文件(数据集).其中npz包含6个numpy数组:
+    在uav_DyPrd_tdma/traj_data/processed_data目录下生成0~8一共9个scaler_node_i.pkl文件和node_i_data.npz文件(数据集).其中npz包含6个numpy数组:
     X_train- 训练输入 (shape: [n_train, 24, 3])
     y_train- 训练标签 (shape: [n_train, 12, 3])
     X_val- 验证输入 (shape: [n_val, 24, 3])
     y_val- 验证标签 (shape: [n_val, 12, 3])
-    X_test- 测试输入 (shape: [n_test, 24, 3]) ← 不用于训练的独立测试集
-    y_test- 测试标签 (shape: [n_test, 12, 3]) ← 不用于训练的独立测试集
-    明确区分了训练、验证和测试三个阶段。
+    X_test- 测试输入 (shape: [n_test, 24, 3])
+    y_test- 测试标签 (shape: [n_test, 12, 3])
+    其中X_test和y_test为不用于训练的独立测试集,明确区分了训练、验证和测试三个阶段。
     训练代码使用训练集训练,验证集来调参和早停。预测代码使用测试集最终评估模型泛化能力。
     所以LSTM中 输入X_train (24个历史点) → 输出y_train (12个未来点)
     X_train[0] = [归一化的位置0, 位置1, ..., 位置23]  # 形状: (24, 3)
     y_train[0] = [归一化的位置24, 位置25, ..., 位置35] # 形状: (12, 3)
+
+多个UAV轨迹数据已预处理并保存为文件位于 uav_DyPrd_tdma/traj_data/processed_data/目录下，用于LSTM模型训练和预测
+文件列表和内容：
+pkl文件（归一化缩放器）：
+对于每个节点 i（i 从0到8，共9个节点），存在文件 scaler_node_i.pkl。
+该文件使用Python的pickle模块保存，包含一个缩放器（scaler）对象（如sklearn的StandardScaler或MinMaxScaler）。用于数据归一化
+npz文件（数据集）：
+对于每个节点 i，存在文件 node_i_data.npz。
+该文件使用NumPy的np.savez保存，包含6个numpy数组，键名为：X_train, y_train, X_val, y_val, X_test, y_test。
+数据描述：
+所有数组中的轨迹数据已使用对应节点的scaler_node_i.pkl进行归一化，值在归一化后的范围内。
+输入X：形状为 [n_samples, 24, 3]，其中n_samples是样本数，24表示历史时间点数量，3表示3D坐标（x, y, z）。每个样本是连续24个时间点的轨迹序列。
+输出y：形状为 [n_samples, 12, 3]，其中12表示未来时间点数量，3表示3D坐标。每个样本对应输入X之后连续12个时间点的轨迹序列。
+数据集划分：原始数据按时间顺序或随机划分，训练集占60%，验证集占20%，测试集占20%。划分后，X_train和y_train用于模型训练，X_val和y_val用于验证和调参（如早停），X_test和y_test作为独立集用于最终评估模型泛化能力，不参与训练过程。
+加载方法：使用np.load(filepath)加载，返回一个字典状对象，可通过键名访问数组，例如data['X_train']。
+数据已按时间序列组织，确保在训练和评估时保持序列的连续性（如避免数据泄漏）。

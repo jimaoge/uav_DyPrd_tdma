@@ -6,8 +6,9 @@ from matplotlib.ticker import MultipleLocator, AutoMinorLocator
 
 # -------------------------- 1. 配置参数和路径 --------------------------
 # json文件实际路径
-json_file_path = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/results/DQN_training/training_data_history.json"
-# json_file_path = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/results/DQN_training/enhanced_adjusted_training_data_history.json"
+json_file_path = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/results/DQN_training/episode_averages.json"
+#json_file_path = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/results/DQN_training/edit_episode_averages.json"
+#json_file_path = "/root/autodl-tmp/lstm_UAV_predict/uav_DyPrd_tdma/results/DQN_training/episode_averages_fixPrd_TPYC.json"
 
 # 设置matplotlib使用英文字体
 plt.rcParams.update({
@@ -45,53 +46,37 @@ def moving_average(data, window_size=WINDOW_SIZE):
 
 # -------------------------- 3. 初始化存储列表 --------------------------
 episode_list = []          # X轴: episode number
-avg_topo_diff_list = []    # ave_topo_diff (avg per episode)
-avg_slot_collision_list = [] # ave_slot_collision (avg per episode)
-avg_throughput_list = []   # ave_Throughput (avg per episode)
-avg_reward_list = []       # reward (avg per episode)
+avg_topo_diff_list = []    # avg_ave_topo_diff
+avg_slot_collision_list = [] # avg_ave_slot_collision
+avg_throughput_list = []   # avg_ave_Throughput
+avg_reward_list = []       # avg_reward
 
-# -------------------------- 4. 读取并解析JSON数据 --------------------------
+# -------------------------- 4. 读取并解析新的JSON数据 --------------------------
 if os.path.exists(json_file_path):
     with open(json_file_path, 'r', encoding='utf-8') as f:
         all_episodes_data = json.load(f)
     
-    # 遍历每个episode，先求和再求平均
+    # 遍历每个episode，直接读取平均值
     for episode_data in all_episodes_data:
         ep = episode_data["episode"]
-        step_list = episode_data["steps"]
-        step_num = len(step_list)  
-
-        sum_topo_diff = 0.0
-        sum_slot_collision = 0.0
-        sum_throughput = 0.0
-        sum_reward = 0.0
         
-        # 累加当前episode所有step的指标值
-        for step_data in step_list:
-            sum_topo_diff += step_data["ave_topo_diff"]
-            sum_slot_collision += step_data["ave_slot_collision"]
-            sum_throughput += step_data["ave_Throughput"]
-            sum_reward += step_data["reward"]
-        
-        # 计算平均值，防除零报错
-        if step_num > 0:
-            avg_topo_diff = sum_topo_diff / step_num
-            avg_slot_collision = sum_slot_collision / step_num
-            avg_throughput = sum_throughput / step_num
-            avg_reward = sum_reward / step_num
-        else:
-            avg_topo_diff = 0.0
-            avg_slot_collision = 0.0
-            avg_throughput = 0.0
-            avg_reward = 0.0
+        # 从JSON中直接读取平均值
+        avg_topo_diff = episode_data["avg_ave_topo_diff"]
+        avg_slot_collision = episode_data["avg_ave_slot_collision"]
+        avg_throughput = episode_data["avg_ave_Throughput"]
+        avg_reward = episode_data["avg_reward"]
         
         episode_list.append(ep)
         avg_topo_diff_list.append(avg_topo_diff)
         avg_slot_collision_list.append(avg_slot_collision)
         avg_throughput_list.append(avg_throughput)
         avg_reward_list.append(avg_reward)
+    
+    print(f"成功加载 {len(all_episodes_data)} 个episode的数据")
+    print(f"episode范围: {min(episode_list)} 到 {max(episode_list)}")
+    
 else:
-    print(f"Error: File not found: {json_file_path}")
+    print(f"错误: 文件未找到: {json_file_path}")
     exit(1)
 
 # -------------------------- 5. 计算移动平均值 --------------------------
@@ -149,57 +134,60 @@ SMOOTHED_LINE_WIDTH = 2.0
 ORIGINAL_ALPHA = 0.7
 SMOOTHED_ALPHA = 1.0
 
-# # 图1: episode vs average topology difference
-# fig1, ax1 = plt.subplots(figsize=(12, 7))
-# ax1.plot(episode_list, avg_topo_diff_list, 
-#          color=ORIGINAL_COLOR, 
-#          linewidth=ORIGINAL_LINE_WIDTH, 
-#          linestyle=ORIGINAL_LINE_STYLE,
-#          alpha=ORIGINAL_ALPHA,
-#          label='Raw Data')
-# ax1.plot(episode_list, smoothed_topo_diff, 
-#          color=SMOOTHED_COLOR, 
-#          linewidth=SMOOTHED_LINE_WIDTH, 
-#          linestyle=SMOOTHED_LINE_STYLE,
-#          alpha=SMOOTHED_ALPHA,
-#          label=f'Moving Average ')
-# ax1.set_title('Average Topology Difference per Episode', fontsize=16, fontweight='bold')
-# ax1.set_xlabel('Episode', fontsize=13)
-# ax1.set_ylabel('Average Topology Difference', fontsize=13)
-# ax1.legend(fontsize=11, loc='best')
+# 图1: episode vs average topology difference
+fig1, ax1 = plt.subplots(figsize=(12, 7))
+ax1.plot(episode_list, avg_topo_diff_list, 
+         color=ORIGINAL_COLOR, 
+         linewidth=ORIGINAL_LINE_WIDTH, 
+         linestyle=ORIGINAL_LINE_STYLE,
+         alpha=ORIGINAL_ALPHA,
+         label='Raw Data')
+ax1.plot(episode_list, smoothed_topo_diff, 
+         color=SMOOTHED_COLOR, 
+         linewidth=SMOOTHED_LINE_WIDTH, 
+         linestyle=SMOOTHED_LINE_STYLE,
+         alpha=SMOOTHED_ALPHA,
+         label=f'Moving Average')
+ax1.set_xlabel('Episode', fontsize=13)
+ax1.set_ylabel('Topology Difference', fontsize=13)
+ax1.legend(fontsize=11, loc='best')
 
-# # 设置x轴刻度
-# set_xaxis_ticks(ax1, max_episode)
+# 设置x轴刻度
+set_xaxis_ticks(ax1, max_episode)
 
-# plt.tight_layout()
-# plt.savefig(os.path.join(base_save_path, 'avg_topo_diff_per_episode_with_smooth.png'), dpi=300, bbox_inches='tight')
-# plt.show()
+plt.tight_layout()
+fig1_path = os.path.join(base_save_path, 'avg_topo_diff_per_episode.svg')
+plt.savefig(fig1_path, dpi=300, bbox_inches='tight')
+print(f"已保存: {fig1_path}")
+plt.show()
 
-# # 图2: episode vs average slot collision
-# fig2, ax2 = plt.subplots(figsize=(12, 7))
-# ax2.plot(episode_list, avg_slot_collision_list, 
-#          color=ORIGINAL_COLOR, 
-#          linewidth=ORIGINAL_LINE_WIDTH, 
-#          linestyle=ORIGINAL_LINE_STYLE,
-#          alpha=ORIGINAL_ALPHA,
-#          label='Raw Data')
-# ax2.plot(episode_list, smoothed_slot_collision, 
-#          color=SMOOTHED_COLOR, 
-#          linewidth=SMOOTHED_LINE_WIDTH, 
-#          linestyle=SMOOTHED_LINE_STYLE,
-#          alpha=SMOOTHED_ALPHA,
-#          label=f'Moving Average ')
-# ax2.set_title('Average Slot Collision per Episode', fontsize=16, fontweight='bold')
-# ax2.set_xlabel('Episode', fontsize=13)
-# ax2.set_ylabel('Average Slot Collision', fontsize=13)
-# ax2.legend(fontsize=11, loc='best')
+# 图2: episode vs average slot collision
+fig2, ax2 = plt.subplots(figsize=(12, 7))
+ax2.plot(episode_list, avg_slot_collision_list, 
+         color=ORIGINAL_COLOR, 
+         linewidth=ORIGINAL_LINE_WIDTH, 
+         linestyle=ORIGINAL_LINE_STYLE,
+         alpha=ORIGINAL_ALPHA,
+         label='Raw Data')
+ax2.plot(episode_list, smoothed_slot_collision, 
+         color=SMOOTHED_COLOR, 
+         linewidth=SMOOTHED_LINE_WIDTH, 
+         linestyle=SMOOTHED_LINE_STYLE,
+         alpha=SMOOTHED_ALPHA,
+         label=f'Moving Average')
+ax2.set_title('Average Slot Collision per Episode', fontsize=16, fontweight='bold')
+ax2.set_xlabel('Episode', fontsize=13)
+ax2.set_ylabel('Average Slot Collision', fontsize=13)
+ax2.legend(fontsize=11, loc='best')
 
-# # 设置x轴刻度
-# set_xaxis_ticks(ax2, max_episode)
+# 设置x轴刻度
+set_xaxis_ticks(ax2, max_episode)
 
-# plt.tight_layout()
-# plt.savefig(os.path.join(base_save_path, 'avg_slot_collision_per_episode_with_smooth.png'), dpi=300, bbox_inches='tight')
-# plt.show()
+plt.tight_layout()
+fig2_path = os.path.join(base_save_path, 'avg_slot_collision_per_episode.png')
+plt.savefig(fig2_path, dpi=300, bbox_inches='tight')
+print(f"已保存: {fig2_path}")
+plt.show()
 
 # 图3: episode vs average throughput
 fig3, ax3 = plt.subplots(figsize=(12, 7))
@@ -214,17 +202,18 @@ ax3.plot(episode_list, smoothed_throughput,
          linewidth=SMOOTHED_LINE_WIDTH, 
          linestyle=SMOOTHED_LINE_STYLE,
          alpha=SMOOTHED_ALPHA,
-         label=f'Moving Average ')
-ax3.set_title('Average Throughput per Episode', fontsize=16, fontweight='bold')
+         label=f'Moving Average')
 ax3.set_xlabel('Episode', fontsize=13)
-ax3.set_ylabel('Average Throughput', fontsize=13)
+ax3.set_ylabel('Average net Throughput(Mbps)', fontsize=13)
 ax3.legend(fontsize=11, loc='best')
 
 # 设置x轴刻度
 set_xaxis_ticks(ax3, max_episode)
 
 plt.tight_layout()
-plt.savefig(os.path.join(base_save_path, 'avg_throughput_per_episode_with_smooth.png'), dpi=300, bbox_inches='tight')
+fig3_path = os.path.join(base_save_path, 'avg_throughput_per_episode.svg')
+plt.savefig(fig3_path, dpi=300, bbox_inches='tight')
+print(f"已保存: {fig3_path}")
 plt.show()
 
 # 图4: episode vs average reward
@@ -240,7 +229,7 @@ ax4.plot(episode_list, smoothed_reward,
          linewidth=SMOOTHED_LINE_WIDTH, 
          linestyle=SMOOTHED_LINE_STYLE,
          alpha=SMOOTHED_ALPHA,
-         label=f'Moving Average ')
+         label=f'Moving Average')
 ax4.set_title('Average Reward per Episode', fontsize=16, fontweight='bold')
 ax4.set_xlabel('Episode', fontsize=13)
 ax4.set_ylabel('Average Reward', fontsize=13)
@@ -250,5 +239,9 @@ ax4.legend(fontsize=11, loc='best')
 set_xaxis_ticks(ax4, max_episode)
 
 plt.tight_layout()
-plt.savefig(os.path.join(base_save_path, 'avg_reward_per_episode_with_smooth.png'), dpi=300, bbox_inches='tight')
+fig4_path = os.path.join(base_save_path, 'avg_reward_per_episode.png')
+plt.savefig(fig4_path, dpi=300, bbox_inches='tight')
+print(f"已保存: {fig4_path}")
 plt.show()
+
+print(f"所有图表已生成并保存到: {base_save_path}")

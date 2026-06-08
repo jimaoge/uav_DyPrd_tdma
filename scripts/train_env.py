@@ -17,6 +17,7 @@ from utils.utils import NumpyEncoder
 def run():
     env = SelfOrganizingNetworkEnv()
     agent = DQN()
+    # agent.load_model(filename='dqn_checkpoint_ep119.pth')
     epsilon_start = config.DQN_PARAMS['epsilon_start']
     epsilon_end = config.DQN_PARAMS['epsilon_end']
     epsilon_decay = config.DQN_PARAMS['epsilon_decay']
@@ -33,7 +34,7 @@ def run():
         print()
         # Epsilon衰减
         Epsilon = max(epsilon_end, epsilon_decay * Epsilon)
-        state = env.reset_random_time()
+        state = env.reset_fix_time()
         
         # 记录每个episode的数据
         episode_data = {
@@ -50,23 +51,23 @@ def run():
             agent.remember(state, action, state_next, reward)
             agent.train()  # 在线学习
 
-            state_list = state.tolist()  # 转列表
-            state_15 = state_list[:-1]   # 去掉最后一位，保留前15位
-            # 手动切分成5组，每组3个值
-            state_5x3 = [state_15[i*3 : (i+1)*3] for i in range(5)]
-            # 按列求平均值
-            link_dynamic = [
-                sum(col) / len(col) for col in zip(*state_5x3)
-            ]            
+            # state_list = state.tolist()  # 转列表
+            # state_15 = state_list[:-1]   # 去掉最后一位，保留前15位
+            # # 手动切分成5组，每组3个值
+            # state_5x3 = [state_15[i*3 : (i+1)*3] for i in range(5)]
+            # # 按列求平均值
+            # link_dynamic = [
+            #     sum(col) / len(col) for col in zip(*state_5x3)
+            # ]            
             # 记录当前step的数据
             step_data = {
                 "step": step_count,
-                "link_dynamic": link_dynamic,
-                "action": int(action),
+                # "link_dynamic": link_dynamic,
+                # "action": int(action),
                 "DyPrd": env.DyPrd,
-                "topo_diff": sum(env.diff),
-                "slot_collision": env.coll,
-                "Throughput": env.T_sum,
+                "ave_topo_diff": sum(env.diff) / env.DyPrd,
+                "ave_slot_collision": env.coll / env.DyPrd,
+                "ave_Throughput": (env.T_sum- config.ENV_PARAMS['boardcast_cost'])/ env.DyPrd,
                 "reward": reward
             }
             
@@ -76,7 +77,7 @@ def run():
         all_episodes_data.append(episode_data)      
         
         # 只在定期保存检查点时保存数据
-        save_interval = 50
+        save_interval = 30
         if (ep + 1) % save_interval == 0:
             # 保存模型检查点
             agent.save_model(filename=f"dqn_checkpoint_ep{ep}.pth")
@@ -89,15 +90,14 @@ def run():
             # data_path = os.path.join(data_dir, f"training_data_ep{start_ep}_to_ep{ep}.json")
             # with open(data_path, 'w', encoding='utf-8') as f:
             #     json.dump(recent_episodes, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+            
+            # 保存最终完整数据
+            final_data_path = os.path.join(data_dir, "training_data_history.json")
+            with open(final_data_path, 'w', encoding='utf-8') as f:
+                json.dump(all_episodes_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)    
     
     # 训练结束后保存最终模型
     agent.save_model()
-    
-    # 保存最终完整数据
-    final_data_path = os.path.join(data_dir, "training_data_final.json")
-    with open(final_data_path, 'w', encoding='utf-8') as f:
-        json.dump(all_episodes_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
-    
     print("训练完成")
             
             

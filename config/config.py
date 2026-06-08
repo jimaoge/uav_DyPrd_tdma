@@ -7,14 +7,15 @@ class UAVConfig:
     
     def __init__(self):
         # ---------- 环境参数 ----------
-        uav_nums = 9.0
-        slot_nums = 9.0
+        uav_nums = 9
+        slot_nums = 9
         Channel_transmission__rate = 10000000.0   # TDMA信道传输速率10Mbps, 1s分为9个时隙,单个时隙传输数据量为10Mbps除以9
         self.ENV_PARAMS = {
             'uav_nums': uav_nums,         # UAV数量
-            'communication_range': 300, # 通信范围(米)
+            'communication_range': 250, # 通信范围(米)
             'slot_nums': slot_nums,        # 时隙数量
-            'boardcast_cost': 9 * (uav_nums * uav_nums * slot_nums) / Channel_transmission__rate,     # 每轮周期所需的更新时隙分配方案的时隙数
+            # 'boardcast_cost': 9 * (uav_nums * uav_nums * slot_nums) / Channel_transmission__rate,     # 每轮周期所需的更新时隙分配方案的时隙数
+            'boardcast_cost': 1.0,
         }
         # ---------- 基础路径 ----------
         # 获取项目根目录（config.py所在目录的父目录）
@@ -33,6 +34,7 @@ class UAVConfig:
             'saved_population_file_name' : 'population.pkl',  # 保存的种群文件名
             'DQN_train_result_path': self.PROJECT_ROOT / "results" / "DQN_training" ,  # 保存DQN训练结果
             'DQN_test_result_path': self.PROJECT_ROOT / "results" / "DQN_testing" ,  # 保存DQN测试结果
+            'ga_fitness_history_path': self.PROJECT_ROOT / "results" / "ga_history"   # 保存遗传算法适应度曲线
         }
         
         # ---------- DQN参数（DyPrd决策） ----------        
@@ -49,8 +51,8 @@ class UAVConfig:
             'DQN_k': DQN_k,             # DQN需要输入历史k - 1个链路动态性
             'max_time': 15000,          # DQN训练数据的最大处理时间范围
             'max_steps_per_episode': 50,  # 每个episode包含几轮周期/几次DyPrd决策
-            'total_episode_in_train': 500,  # 一次训练包含多少个episode
-            'DQN_train_save_interval': 10,  # 每多少个episode保存一次指标
+            'total_episode_in_train': 5,  # 一次训练包含多少个episode
+            'DQN_train_save_interval': 1,  # 每多少个episode保存一次指标
             'slot_reward_ratio': 1.0,       # 计算奖励时，时隙吞吐量的占比
             'epsilon_start': 0.9,           # 随机探索率的初始值
             'epsilon_end' : 0.05,           # 随机探索率的最小值
@@ -88,7 +90,7 @@ class UAVConfig:
             'population_size' : 100,  # 种群的个体数量
             'probability_of_cross' : 0.6,  # 交叉概率
             'probability_of_mutate' : 0.05,  # 变异概率
-            'number_of_generation' : 200,  # 主算法循环次数
+            'number_of_generation' : 100,  # 主算法循环次数
             'number_of_node' : uav_nums,
             'number_of_slot' : slot_nums
         }
